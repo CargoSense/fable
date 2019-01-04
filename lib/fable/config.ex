@@ -9,7 +9,8 @@ defmodule Fable.Config do
     event_table: "events",
     event_schema: Fable.Event,
     event_handler_table: "event_handlers",
-    event_handler_table: Fable.EventHandler
+    event_handler_table: Fable.EventHandler,
+    json_codec: Jason
   ]
 
   def new(attrs) do

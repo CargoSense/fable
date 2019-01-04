@@ -14,15 +14,6 @@ defmodule Fable.EventHandler do
     timestamps(type: :utc_datetime_usec)
   end
 
-  def backlog_size(handler) do
-    Sensetra.Repo.one!(
-      from(e in Fable.Event,
-        where: e.id > ^handler.last_event_id,
-        select: count(e.id)
-      )
-    )
-  end
-
   def update_state(handler, state) do
     handler
     |> change(%{state: state})
