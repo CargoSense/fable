@@ -15,7 +15,7 @@ defmodule Fable.Repo do
   def serial(repo, %Ecto.Query{} = queryable, fun, opts) when is_function(fun, 1) do
     fun = fn ->
       schema = lock(queryable, repo)
-      fun.(schema)
+      rollback_on_error(repo, fun.(schema))
     end
 
     repo.transaction(fun, opts)
@@ -25,7 +25,7 @@ defmodule Fable.Repo do
       when is_function(fun, 0) do
     fun = fn ->
       lock(schema, repo)
-      fun.()
+      rollback_on_error(repo, fun.())
     end
 
     repo.transaction(fun, opts)
@@ -38,6 +38,14 @@ defmodule Fable.Repo do
     end)
     |> Multi.prepend(multi)
     |> repo.transaction(opts)
+  end
+
+  defp rollback_on_error(repo, {:error, error}) do
+    repo.rollback(error)
+  end
+
+  defp rollback_on_error(_, {:ok, value}) do
+    value
   end
 
   def lock(%Ecto.Query{} = query, repo) do
