@@ -23,12 +23,14 @@ defmodule Fable do
           n
       end
 
-    %__MODULE__.EventHandler{
+    %__MODULE__.EventHandler{}
+    |> Ecto.Changeset.change(%{
       last_event_id: last_event_id,
       name: name,
       module: module,
       state: initial_state
-    }
+    })
+    |> Ecto.Changeset.unique_constraint(:name)
     |> repo.insert()
   end
 

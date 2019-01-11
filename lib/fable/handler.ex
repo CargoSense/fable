@@ -5,7 +5,7 @@ defmodule Fable.Handler do
 
   @callback handle_event(term, map) :: {:ok, map} | term | no_return
   @callback handle_error(term, term, map) :: {:retry, pos_integer, map} | :stop
-  @callback start_at() :: :head | :origin | pos_integer
+  @callback start_at(map) :: :head | :origin | pos_integer
 
   defstruct [
     :config,
@@ -178,7 +178,7 @@ defmodule Fable.Handler do
         """)
 
         handler =
-          case apply(state.module, :handle_error, [event, error, state.handler.state]) do
+          case apply(state.handler.module, :handle_error, [event, error, state.handler.state]) do
             {:retry, interval, handler_state} ->
               Logger.info("Handler #{state.handler.name} retrying in #{interval}...")
               Process.send_after(self(), :retry, interval)
@@ -228,7 +228,7 @@ defmodule Fable.Handler do
   end
 
   defp get_events(state) do
-    Fable.Event
+    state.config.event_schema
     |> where([e], e.id > ^state.handler.last_event_id)
     |> order_by(asc: :id)
     |> limit(^state.batch_size)
@@ -237,7 +237,7 @@ defmodule Fable.Handler do
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
     with %{rows: [[true]]} <- do_lock(state) do
-      Logger.debug("Handler #{state.module} lock acquired on #{inspect(node())}")
+      Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 
       ref = Postgrex.Notifications.listen!(state.notifications, "events")
 
