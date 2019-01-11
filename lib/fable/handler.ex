@@ -8,20 +8,20 @@ defmodule Fable.Handler do
   @callback start_at() :: :head | :origin | pos_integer
 
   defstruct [
+    :config,
     :listen_ref,
     :conn,
     :handler,
-    :name,
-    :namespace,
     :notifications,
     :repo,
+    :name,
     batch_size: 10
   ]
 
-  def child_spec(config) do
+  def child_spec(opts) do
     default = %{
-      id: config.name,
-      start: {__MODULE__, :start_link, [config]}
+      id: opts.name,
+      start: {__MODULE__, :start_link, [opts]}
     }
 
     Supervisor.child_spec(default, shutdown: 10_000)
@@ -37,16 +37,16 @@ defmodule Fable.Handler do
     GenServer.start_link(__MODULE__, config, [])
   end
 
-  def init(config) do
+  def init(%{config: config, name: name}) do
     Process.flag(:trap_exit, true)
     {:ok, conn} = Postgrex.start_link(db_config(config.repo))
 
     state = %__MODULE__{
       conn: conn,
       repo: config.repo,
-      name: config.name,
-      namespace: config.namespace,
-      notifications: config.notifications
+      config: config,
+      name: name,
+      notifications: Fable.via(config.registry, Notifications)
     }
 
     {:ok, state, {:continue, :acquire_lock}}
@@ -238,6 +238,7 @@ defmodule Fable.Handler do
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
     with %{rows: [[true]]} <- do_lock(state) do
       Logger.debug("Handler #{state.module} lock acquired on #{inspect(node())}")
+
       ref = Postgrex.Notifications.listen!(state.notifications, "events")
 
       %{
@@ -261,7 +262,7 @@ defmodule Fable.Handler do
   FROM event_handlers
   WHERE name = $2 AND active = true
   """
-  defp do_lock(%__MODULE__{namespace: namespace, name: name, conn: conn}) do
+  defp do_lock(%__MODULE__{config: %{registry: namespace}, name: name, conn: conn}) do
     # The hash here is important because postgres advisory locks are a global
     # namespace. If some other part of the application is also trying
     # to take advisory locks based on row ids there's a conflict possible.

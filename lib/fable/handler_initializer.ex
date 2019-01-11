@@ -4,22 +4,27 @@ defmodule Fable.HandlerInitializer do
   alias Fable.EventHandler
 
   defstruct [
+    :config,
     :repo,
-    :notifications,
-    :namespace,
     :handle_super,
     handlers: %{}
   ]
 
-  def start_link(opts) do
-    {name, opts} = Keyword.pop(opts, :name)
-    GenServer.start_link(__MODULE__, opts, name: name)
+  def start_link(config) do
+    GenServer.start_link(__MODULE__, config, name: Fable.via(config.registry, __MODULE__))
   end
 
-  def init(opts) do
-    state = struct!(__MODULE__, opts)
-    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-enabled")
-    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-disabled")
+  def init(config) do
+    state = %__MODULE__{
+      repo: config.repo,
+      handle_super: Fable.via(config.registry, HandlerSupervisor),
+      config: config
+    }
+
+    notifications = Fable.via(config.registry, Notifications)
+
+    _ = Postgrex.Notifications.listen!(notifications, "event-handler-enabled")
+    _ = Postgrex.Notifications.listen!(notifications, "event-handler-disabled")
     state = init_handlers(state)
     {:ok, state}
   end
@@ -52,14 +57,7 @@ defmodule Fable.HandlerInitializer do
   end
 
   defp add_handler(handler, state) do
-    config = %{
-      repo: state.repo,
-      name: handler.name,
-      namespace: state.namespace,
-      notifications: state.notifications
-    }
-
-    spec = Fable.Handler.child_spec(config)
+    spec = Fable.Handler.child_spec(%{config: state.config, name: handler.name})
     {:ok, pid} = DynamicSupervisor.start_child(state.handle_super, spec)
     ref = Process.monitor(pid)
     put_in(state.handlers[handler.name], {ref, pid})
