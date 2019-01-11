@@ -50,7 +50,7 @@ defmodule Fable do
 
     children = [
       {Registry, keys: :unique, name: registry},
-      notifications_child(config, notifications_name),
+      notifications_child(config.repo, notifications_name),
       {DynamicSupervisor, strategy: :one_for_one, name: via(registry, HandlerSupervisor)},
       {__MODULE__.HandlerInitializer, config}
     ]
