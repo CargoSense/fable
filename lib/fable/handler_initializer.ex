@@ -18,13 +18,13 @@ defmodule Fable.HandlerInitializer do
 
   def init(opts) do
     state = struct!(__MODULE__, opts)
-    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-inserted")
-    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-deleted")
+    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-enabled")
+    _ = Postgrex.Notifications.listen!(state.notifications, "event-handler-disabled")
     state = init_handlers(state)
     {:ok, state}
   end
 
-  def handle_info({:notification, _, _, "event-handler-inserted", name}, state) do
+  def handle_info({:notification, _, _, "event-handler-enabled", name}, state) do
     state =
       EventHandler
       |> state.repo.get_by!(name: name)
@@ -33,7 +33,7 @@ defmodule Fable.HandlerInitializer do
     {:noreply, state}
   end
 
-  def handle_info({:notification, _, _, "event-handler-deleted", name}, state) do
+  def handle_info({:notification, _, _, "event-handler-disabled", name}, state) do
     state = remove_handler(name, state)
     {:noreply, state}
   end
@@ -53,6 +53,7 @@ defmodule Fable.HandlerInitializer do
 
   defp add_handler(handler, state) do
     config = %{
+      repo: state.repo,
       name: handler.name,
       namespace: state.namespace,
       notifications: state.notifications

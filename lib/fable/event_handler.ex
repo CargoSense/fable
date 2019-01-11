@@ -1,6 +1,5 @@
 defmodule Fable.EventHandler do
   use Ecto.Schema
-  import Ecto.Query
   import Ecto.Changeset
 
   alias Fable

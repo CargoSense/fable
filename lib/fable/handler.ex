@@ -14,6 +14,7 @@ defmodule Fable.Handler do
     :name,
     :namespace,
     :notifications,
+    :repo,
     batch_size: 10
   ]
 
@@ -26,16 +27,23 @@ defmodule Fable.Handler do
     Supervisor.child_spec(default, shutdown: 10_000)
   end
 
+  def disable(repo, name) do
+    Fable.EventHandler
+    |> where(name: ^to_string(name))
+    |> repo.update_all(set: [active: false])
+  end
+
   def start_link(config) do
     GenServer.start_link(__MODULE__, config, [])
   end
 
   def init(config) do
     Process.flag(:trap_exit, true)
-    {:ok, conn} = Postgrex.start_link(db_config())
+    {:ok, conn} = Postgrex.start_link(db_config(config.repo))
 
     state = %__MODULE__{
       conn: conn,
+      repo: config.repo,
       name: config.name,
       namespace: config.namespace,
       notifications: config.notifications
@@ -147,7 +155,7 @@ defmodule Fable.Handler do
       {:ok, data} ->
         state.handler
         |> Fable.EventHandler.progress_to(event.id, data)
-        |> Repo.update()
+        |> state.repo.update()
         |> case do
           {:ok, handler} ->
             {:cont, %__MODULE__{state | handler: handler}}
@@ -159,7 +167,7 @@ defmodule Fable.Handler do
             Stopping!
             """)
 
-            Fable.disable(state.handler.name)
+            disable(state.repo, state.handler.name)
             {:halt, %{state | handler: nil}}
         end
 
@@ -177,7 +185,7 @@ defmodule Fable.Handler do
 
               state.handler
               |> Fable.EventHandler.update_state(handler_state)
-              |> Repo.update!()
+              |> state.repo.update!()
 
             :stop ->
               Logger.error("""
@@ -185,7 +193,7 @@ defmodule Fable.Handler do
               Manual intervention required!
               """)
 
-              Fable.disable(state.handler.name)
+              disable(state.repo, state.handler.name)
 
               nil
 
@@ -196,7 +204,7 @@ defmodule Fable.Handler do
               Manual intervention required!
               """)
 
-              Fable.disable(state.handler.name)
+              disable(state.repo, state.handler.name)
 
               nil
           end
@@ -224,7 +232,7 @@ defmodule Fable.Handler do
     |> where([e], e.id > ^state.handler.last_event_id)
     |> order_by(asc: :id)
     |> limit(^state.batch_size)
-    |> Repo.all()
+    |> state.repo.all()
   end
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
@@ -235,7 +243,7 @@ defmodule Fable.Handler do
       %{
         state
         | listen_ref: ref,
-          handler: Repo.get_by!(Fable.EventHandler, name: state.name)
+          handler: state.repo.get_by!(Fable.EventHandler, name: state.name)
       }
     else
       _ ->
@@ -262,8 +270,8 @@ defmodule Fable.Handler do
     Postgrex.query!(conn, @lock_query, [lock, name])
   end
 
-  defp db_config() do
-    Repo.config()
+  defp db_config(repo) do
+    repo.config()
     |> Keyword.put(:pool_size, 1)
     # remove the pool so that the sandbox pool
     # doesn't cause confusion
