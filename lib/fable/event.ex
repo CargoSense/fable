@@ -1,6 +1,4 @@
 defmodule Fable.Event do
-  import Ecto.Query
-
   defmacro __using__(_) do
     quote do
       use Ecto.Schema
@@ -8,10 +6,12 @@ defmodule Fable.Event do
     end
   end
 
-  def for_aggregate(%agg{id: id}) do
+  def for_aggregate(schema, %agg{id: id}) do
+    import Ecto.Query
+
     table = agg.__schema__(:source)
 
-    __MODULE__
+    schema
     |> where(aggregate_table: ^table, aggregate_id: ^id)
   end
 

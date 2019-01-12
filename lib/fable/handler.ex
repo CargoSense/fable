@@ -151,8 +151,6 @@ defmodule Fable.Handler do
   end
 
   defp handle_event(event, state) do
-    event = Fable.Event.parse_data(state.repo, event)
-
     case run_handler(state, event) do
       {:ok, data} ->
         state.handler
@@ -216,6 +214,7 @@ defmodule Fable.Handler do
   end
 
   defp run_handler(state, event) do
+    event = Fable.Event.parse_data(state.repo, event)
     apply(state.handler.module, :handle_event, [event, state.handler.state])
   rescue
     e ->
@@ -223,7 +222,6 @@ defmodule Fable.Handler do
       Handler #{state.handler.name} raised exception!
       #{inspect(e)}
       #{Exception.format_stacktrace(__STACKTRACE__)}
-      Manual intervention required!
       """)
 
       {:error, e}
