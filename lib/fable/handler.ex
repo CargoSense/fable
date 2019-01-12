@@ -151,6 +151,8 @@ defmodule Fable.Handler do
   end
 
   defp handle_event(event, state) do
+    event = Fable.Event.parse_data(state.repo, event)
+
     case run_handler(state, event) do
       {:ok, data} ->
         state.handler

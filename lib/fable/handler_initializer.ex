@@ -51,7 +51,7 @@ defmodule Fable.HandlerInitializer do
 
   defp remove_handler(handler_name, state) do
     {{ref, pid}, handlers} = Map.pop(state.handlers, handler_name)
-    _ = Process.demonitor(ref, flush: true)
+    _ = Process.demonitor(ref, [:flush])
     :ok = DynamicSupervisor.terminate_child(state.handler_super, pid)
     %{state | handlers: handlers}
   end
