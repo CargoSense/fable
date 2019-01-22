@@ -72,8 +72,19 @@ defmodule Fable.Events do
 
     event = Fable.Event.parse_data(repo, event)
 
-    function = Map.fetch!(config.router.handlers(), Module.safe_concat([event.type]))
-    function.(aggregate, event.data)
+    case Map.fetch!(config.router.handlers(), Module.safe_concat([event.type])) do
+      functions when is_list(functions) ->
+        Enum.reduce_while(functions, {:ok, aggregate}, fn
+          fun, {:ok, aggregate} ->
+            {:cont, fun.(aggregate, event.data)}
+
+          _, value ->
+            {:halt, value}
+        end)
+
+      function when is_function(function) ->
+        function.(aggregate, event.data)
+    end
   end
 
   defp generate(%schema{id: id, last_event_id: prev_event_id}, %type{} = event, config, opts) do
