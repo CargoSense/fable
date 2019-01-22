@@ -5,20 +5,20 @@ defmodule Fable.Config do
   defstruct [
     :repo,
     :registry,
+    :router,
     repo_opts: [],
-    event_table: "events",
     event_schema: Fable.Event,
-    event_handler_table: "event_handlers",
-    event_handler_table: Fable.EventHandler,
+    event_handler_schema: Fable.EventHandler,
     json_codec: Jason
   ]
 
-  def new(attrs) do
-    __MODULE__
-    |> struct!(attrs)
-    |> Map.update!(:registry, fn
-      nil -> Module.concat(Fable, attrs.repo)
-      val -> val
-    end)
+  def new(module, attrs) do
+    attrs =
+      attrs
+      |> Map.new
+      |> Map.put_new(:router, module)
+      |> Map.put_new(:registry, Module.concat(Fable, attrs[:repo]))
+
+    struct!(__MODULE__, attrs)
   end
 end

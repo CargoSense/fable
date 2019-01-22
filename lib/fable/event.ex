@@ -6,6 +6,19 @@ defmodule Fable.Event do
     end
   end
 
+  use Ecto.Schema
+
+  schema "events" do
+    field(:prev_event_id, :integer)
+    field(:aggregate_id, Ecto.UUID, null: false)
+    field(:aggregate_table, :string, null: false)
+    field(:type, :string, null: false)
+    field(:version, :integer, null: false)
+    field(:meta, :map, default: %{})
+    field(:data, :map, default: %{})
+    field(:inserted_at, :utc_datetime, read_after_writes: true)
+  end
+
   def for_aggregate(schema, %agg{id: id}) do
     import Ecto.Query
 

@@ -22,10 +22,22 @@ defmodule Fable.Repo do
   end
 
   def serial(repo, %{__meta__: %Ecto.Schema.Metadata{}} = schema, fun, opts)
-      when is_function(fun, 0) do
+      when is_function(fun, 1) do
+    case schema do
+      %{last_event_id: _, id: _} ->
+        :ok
+
+      _ ->
+        raise """
+        Only tables with a `last_event_id` and `id` columns can be used as aggregates!
+        You gave me:
+        #{inspect(schema)}
+        """
+    end
+
     fun = fn ->
-      lock(schema, repo)
-      rollback_on_error(repo, fun.())
+      schema = lock(schema, repo)
+      rollback_on_error(repo, fun.(schema))
     end
 
     repo.transaction(fun, opts)

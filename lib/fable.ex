@@ -34,13 +34,6 @@ defmodule Fable do
     |> repo.insert()
   end
 
-  def start_link(opts) do
-    opts = Map.new(opts)
-    config = __MODULE__.Config.new(opts)
-    config.repo || raise "Ecto Repo required!"
-    Supervisor.start_link(__MODULE__, config, [])
-  end
-
   @doc false
   def via(registry, name) do
     {:via, Registry, {registry, name}}
