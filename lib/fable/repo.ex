@@ -36,7 +36,7 @@ defmodule Fable.Repo do
     end
 
     fun = fn ->
-      schema = lock(schema, repo)
+      schema = lock(schema, repo) || schema
       rollback_on_error(repo, fun.(schema))
     end
 

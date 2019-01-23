@@ -14,8 +14,11 @@ defmodule Fable.EventHandler do
   end
 
   def update_state(handler, state) do
-    handler
-    |> change(%{state: state})
+    if handler.state == state do
+      handler |> change(%{})
+    else
+      handler |> change(%{state: state})
+    end
   end
 
   def progress_to(handler, last_event_id, state) do
