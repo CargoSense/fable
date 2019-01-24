@@ -215,7 +215,7 @@ defmodule Fable.Handler do
 
   defp run_handler(state, event) do
     event = Fable.Event.parse_data(state.repo, event)
-    apply(state.handler.module, :handle_event, [event, state.handler.state])
+    apply(state.handler.module, :handle_event, [event.data, state.handler.state])
   rescue
     e ->
       Logger.error("""

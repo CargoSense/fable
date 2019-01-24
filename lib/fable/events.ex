@@ -19,6 +19,14 @@ defmodule Fable.Events do
         Supervisor.start_link(Fable, __fable_config__(), [])
       end
 
+      def log(schema) do
+        unquote(__MODULE__).log(@__fable_config__, schema)
+      end
+
+      def replay(agg) do
+        unquote(__MODULE__).replay(@__fable_config__, agg)
+      end
+
       def emit(schema, event, opts \\ []) do
         unquote(__MODULE__).emit(@__fable_config__, schema, event, opts)
       end
@@ -27,6 +35,60 @@ defmodule Fable.Events do
         unquote(__MODULE__).emit!(@__fable_config__, schema, event, opts)
       end
     end
+  end
+
+  def replay(%{repo: repo} = config, agg) do
+    repo.transaction(fn ->
+      agg |> repo.delete()
+      replay(config, agg, log(config, agg))
+    end)
+  end
+
+  def replay(%{repo: repo} = config, %module{id: id} = aggregate, events) do
+    import Ecto.Query
+
+    Enum.reduce_while(events, aggregate, fn event, prev_agg ->
+      repo.serial(prev_agg, fn ->
+        handle(event, prev_agg, config)
+      end)
+      |> case do
+        {:ok, new_agg} ->
+          update_query =
+            where(
+              module,
+              [m],
+              m.id == ^id and
+                (m.last_event_id == ^prev_agg.last_event_id or m.last_event_id == ^event.id or
+                   is_nil(m.last_event_id))
+            )
+
+          case repo.update_all(update_query, set: [last_event_id: event.id]) do
+            {1, _} ->
+              :ok
+
+            result ->
+              raise """
+              Update failed: #{inspect(update_query)}
+              Got: #{inspect(result)}
+              """
+          end
+
+          {:cont, %{new_agg | last_event_id: event.id}}
+
+        error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  def log(config, agg) do
+    import Ecto.Query
+
+    config.event_schema
+    |> Fable.Event.for_aggregate(agg)
+    |> order_by(asc: :id)
+    |> config.repo.all()
+    |> Enum.map(&Fable.Event.parse_data(config.repo, &1))
   end
 
   def emit!(config, schema, event, opts \\ []) do
@@ -42,7 +104,16 @@ defmodule Fable.Events do
   @spec emit(Fable.Config.t(), Ecto.Queryable.t() | Ecto.Schema.t(), Fable.Event.t(), Keyword.t()) ::
           {:ok, Ecto.Schema.t()} | {:error, term}
   def emit(%{repo: repo} = config, schema_or_queryable, event, opts \\ []) do
-    repo.serial(schema_or_queryable, fn schema ->
+    schema =
+      case schema_or_queryable do
+        %Ecto.Query{} = query -> repo.one!(query)
+        schema -> schema
+      end
+
+    # We are very intentionally ignoring the retrieved _schema here. If emit/4 has been called,
+    # then the user is definitely trying to emit an event based on the version of the aggregate
+    # that they know about. It may become out of date, and that should cause an error.
+    repo.serial(schema_or_queryable, fn _schema ->
       do_emit(config, schema, event, opts)
     end)
   end
