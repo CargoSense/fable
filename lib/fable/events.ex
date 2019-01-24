@@ -39,16 +39,16 @@ defmodule Fable.Events do
 
   def replay(%{repo: repo} = config, agg) do
     repo.transaction(fn ->
-      agg |> repo.delete()
+      agg |> repo.delete!()
       replay(config, agg, log(config, agg))
     end)
   end
 
-  def replay(%{repo: repo} = config, %module{id: id} = aggregate, events) do
+  def replay(%{repo: repo} = config, %module{id: id}, events) do
     import Ecto.Query
 
-    Enum.reduce_while(events, aggregate, fn event, prev_agg ->
-      repo.serial(prev_agg, fn ->
+    Enum.reduce_while(events, struct!(module, %{id: id}), fn event, prev_agg ->
+      repo.serial(prev_agg, fn prev_agg ->
         handle(event, prev_agg, config)
       end)
       |> case do
