@@ -118,9 +118,13 @@ defmodule Fable.Handler do
     {:stop, :connection_died, state}
   end
 
+  def handle_info({:EXIT, _, :normal}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(msg, state) do
     Logger.error("""
-    Unexpected message: #{inspect(msg)}
+    Unexpected message: #{inspect(msg)} #{inspect(state)}
     """)
 
     {:noreply, state}
