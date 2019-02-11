@@ -103,17 +103,19 @@ defmodule Fable.Events do
 
   @spec emit(Fable.Config.t(), Ecto.Queryable.t() | Ecto.Schema.t(), Fable.Event.t(), Keyword.t()) ::
           {:ok, Ecto.Schema.t()} | {:error, term}
-  def emit(%{repo: repo} = config, schema_or_queryable, event, opts \\ []) do
-    schema =
-      case schema_or_queryable do
-        %Ecto.Query{} = query -> repo.one!(query)
-        schema -> schema
-      end
+  def emit(config, schema_or_queryable, event, opts \\ [])
 
+  def emit(%{repo: repo} = config, %Ecto.Query{} = queryable, event, opts) do
+    repo.serial(queryable, fn schema ->
+      do_emit(config, schema, event, opts)
+    end)
+  end
+
+  def emit(%{repo: repo} = config, schema, event, opts) do
     # We are very intentionally ignoring the retrieved _schema here. If emit/4 has been called,
     # then the user is definitely trying to emit an event based on the version of the aggregate
     # that they know about. It may become out of date, and that should cause an error.
-    repo.serial(schema_or_queryable, fn _schema ->
+    repo.serial(schema, fn _schema ->
       do_emit(config, schema, event, opts)
     end)
   end
