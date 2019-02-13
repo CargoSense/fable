@@ -34,6 +34,10 @@ defmodule Fable.Events do
       def emit!(schema, event, opts \\ []) do
         unquote(__MODULE__).emit!(@__fable_config__, schema, event, opts)
       end
+
+      def unconditionally_emit(schema, event, opts \\ []) do
+        unquote(__MODULE__).unconditionally_emit(@__fable_config__, schema, event, opts)
+      end
     end
   end
 
@@ -99,6 +103,14 @@ defmodule Fable.Events do
       error ->
         raise error
     end
+  end
+
+  def unconditionally_emit(%{repo: repo} = config, schema_or_queryable, event, opts \\ []) do
+    # Unlike emit/4, we want to emit this event regardless of whether we've been
+    # passed an out of date schema
+    repo.serial(schema_or_queryable, fn schema ->
+      do_emit(config, schema, event, opts)
+    end)
   end
 
   @spec emit(Fable.Config.t(), Ecto.Queryable.t() | Ecto.Schema.t(), Fable.Event.t(), Keyword.t()) ::
