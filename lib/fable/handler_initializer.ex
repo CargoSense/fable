@@ -6,7 +6,7 @@ defmodule Fable.HandlerInitializer do
   defstruct [
     :config,
     :repo,
-    :handle_super,
+    :handler_super,
     handlers: %{}
   ]
 
@@ -17,7 +17,7 @@ defmodule Fable.HandlerInitializer do
   def init(config) do
     state = %__MODULE__{
       repo: config.repo,
-      handle_super: Fable.via(config.registry, HandlerSupervisor),
+      handler_super: Fable.via(config.registry, HandlerSupervisor),
       config: config
     }
 
@@ -58,7 +58,7 @@ defmodule Fable.HandlerInitializer do
 
   defp add_handler(handler, state) do
     spec = Fable.Handler.child_spec(%{config: state.config, name: handler.name})
-    {:ok, pid} = DynamicSupervisor.start_child(state.handle_super, spec)
+    {:ok, pid} = DynamicSupervisor.start_child(state.handler_super, spec)
     ref = Process.monitor(pid)
     put_in(state.handlers[handler.name], {ref, pid})
   end
