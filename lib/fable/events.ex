@@ -15,6 +15,16 @@ defmodule Fable.Events do
       @doc false
       def __fable_config__(), do: @__fable_config__
 
+      def whereis(name) do
+        case Registry.lookup(__fable_config__().registry, {Fable.ProcessManager, name}) do
+          [{pid, _}] ->
+            pid
+
+          _ ->
+            nil
+        end
+      end
+
       def start_link(_) do
         Supervisor.start_link(Fable, __fable_config__(), [])
       end

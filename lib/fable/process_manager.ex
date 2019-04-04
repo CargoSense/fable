@@ -32,8 +32,10 @@ defmodule Fable.ProcessManager do
     |> repo.update_all(set: [active: false])
   end
 
-  def start_link(config) do
-    GenServer.start_link(__MODULE__, config, [])
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts,
+      name: Fable.via(opts.config.registry, {__MODULE__, opts.name})
+    )
   end
 
   def init(%{config: config, name: name}) do
@@ -235,8 +237,6 @@ defmodule Fable.ProcessManager do
   end
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
-    state.config |> IO.inspect(label: :foo)
-
     with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
       Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 

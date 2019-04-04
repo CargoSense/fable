@@ -1,6 +1,8 @@
 defmodule Fable.ProcessManager.Locks do
   use GenServer
 
+  require Logger
+
   defstruct [
     :config,
     :conn,
@@ -37,18 +39,49 @@ defmodule Fable.ProcessManager.Locks do
     end
   end
 
-  @lock_query """
-  SELECT pg_try_advisory_lock($1)
-  FROM event_handlers
-  WHERE name = $2 AND active = true
-  """
-  defp lock(%__MODULE__{config: %{registry: namespace}, conn: conn}, name) do
+  def handle_info({:DOWN, ref, :process, _, _}, state) do
+    {name, state} = pop_in(state.handlers[ref])
+
+    if name, do: unlock(state, name)
+
+    {:noreply, state}
+  end
+
+  defp lock(%__MODULE__{config: %{registry: namespace} = config, conn: conn}, name) do
     # The hash here is important because postgres advisory locks are a global
     # namespace. If some other part of the application is also trying
     # to take advisory locks based on row ids there's a conflict possible.
     # By using a hash based on the namespace and name we decrease that probability.
     lock = :erlang.phash2({namespace, name})
-    Postgrex.query!(conn, @lock_query, [lock, name])
+    schema = config.process_manager_schema.__schema__(:source)
+
+    lock_query = """
+    SELECT pg_try_advisory_lock($1)
+    FROM #{schema}
+    WHERE name = $2 AND active = true
+    """
+
+    Logger.debug("""
+    Fable Postgrex:
+    #{lock_query} #{inspect([lock, name])}
+    """)
+
+    Postgrex.query!(conn, lock_query, [lock, name])
+  end
+
+  defp unlock(%__MODULE__{config: %{registry: namespace}, conn: conn}, name) do
+    lock = :erlang.phash2({namespace, name})
+
+    lock_query = """
+    SELECT pg_advisory_unlock($1)
+    """
+
+    Logger.debug("""
+    Fable Postgrex:
+    #{lock_query} #{inspect([lock])}
+    """)
+
+    Postgrex.query!(conn, lock_query, [lock])
   end
 
   defp db_config(repo) do

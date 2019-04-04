@@ -27,6 +27,10 @@ defmodule Fable.ProcessManager.Initializer do
     {:ok, state}
   end
 
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    {:noreply, state}
+  end
+
   def handle_info({:notification, _, _, "event-handler-enabled", name}, state) do
     state =
       state.config.process_manager_schema
