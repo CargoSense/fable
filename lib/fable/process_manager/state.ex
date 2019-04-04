@@ -1,10 +1,10 @@
-defmodule Fable.EventHandler do
+defmodule Fable.ProcessManager.State do
   use Ecto.Schema
   import Ecto.Changeset
 
   alias Fable
 
-  schema "event_handlers" do
+  schema "process_managers" do
     field(:last_event_id, :integer, read_after_writes: true)
     field(:name, :string, null: false)
     field(:module, Fable.ModuleColumn, null: false)

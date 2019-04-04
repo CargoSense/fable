@@ -1,7 +1,7 @@
-defmodule Fable.HandlerInitializer do
+defmodule Fable.ProcessManager.Initializer do
   use GenServer
 
-  alias Fable.EventHandler
+  alias Fable.ProcessManager
 
   defstruct [
     :config,
@@ -31,7 +31,7 @@ defmodule Fable.HandlerInitializer do
 
   def handle_info({:notification, _, _, "event-handler-enabled", name}, state) do
     state =
-      EventHandler
+      state.config.process_manager_schema
       |> state.repo.get_by!(name: name)
       |> add_handler(state)
 
@@ -44,7 +44,7 @@ defmodule Fable.HandlerInitializer do
   end
 
   defp init_handlers(state) do
-    EventHandler
+    state.config.process_manager_schema
     |> state.repo.all
     |> Enum.reduce(state, &add_handler/2)
   end
@@ -57,7 +57,7 @@ defmodule Fable.HandlerInitializer do
   end
 
   defp add_handler(handler, state) do
-    spec = Fable.Handler.child_spec(%{config: state.config, name: handler.name})
+    spec = Fable.ProcessManager.child_spec(%{config: state.config, name: handler.name})
     {:ok, pid} = DynamicSupervisor.start_child(state.handler_super, spec)
     ref = Process.monitor(pid)
     put_in(state.handlers[handler.name], {ref, pid})
