@@ -6,7 +6,8 @@ defmodule Fable.ProcessManager.Locks do
   defstruct [
     :config,
     :conn,
-    handlers: %{}
+    refs: %{},
+    names: %{}
   ]
 
   def start_link(config) do
@@ -29,20 +30,40 @@ defmodule Fable.ProcessManager.Locks do
   end
 
   def handle_call({:acquire, name}, {pid, _}, state) do
-    case lock(state, name) do
-      %{rows: [[true]]} ->
-        ref = Process.monitor(pid)
-        {:reply, :ok, put_in(state.handlers[ref], name)}
-
+    with {:ok, state} <- not_already_locked(state, name, pid),
+         %{rows: [[true]]} <-
+           lock(state, name) do
+      ref = Process.monitor(pid)
+      {:reply, :ok, put_in(state.refs[ref], name)}
+    else
       _ ->
         {:reply, :error, state}
     end
   end
 
-  def handle_info({:DOWN, ref, :process, _, _}, state) do
-    {name, state} = pop_in(state.handlers[ref])
+  defp not_already_locked(%{names: names} = state, name, pid) do
+    case Map.fetch(names, name) do
+      {:ok, ^pid} ->
+        {:ok, state}
 
-    if name, do: unlock(state, name)
+      {:ok, _} ->
+        :error
+
+      :error ->
+        {:ok, %{state | names: Map.put(names, name, pid)}}
+    end
+  end
+
+  def handle_info({:DOWN, ref, :process, _, _}, state) do
+    {name, state} = pop_in(state.refs[ref])
+
+    state =
+      if name do
+        unlock(state, name)
+        Map.update!(state, :names, &Map.delete(&1, name))
+      else
+        state
+      end
 
     {:noreply, state}
   end
