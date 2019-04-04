@@ -1,8 +1,6 @@
 defmodule Fable.ProcessManager.Initializer do
   use GenServer
 
-  alias Fable.ProcessManager
-
   defstruct [
     :config,
     :repo,

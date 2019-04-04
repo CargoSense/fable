@@ -1,8 +1,6 @@
 defmodule Fable.ProcessManager.Locks do
   use GenServer
 
-  alias Fable.ProcessManager
-
   defstruct [
     :config,
     :conn,
