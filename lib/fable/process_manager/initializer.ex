@@ -17,7 +17,7 @@ defmodule Fable.ProcessManager.Initializer do
   def init(config) do
     state = %__MODULE__{
       repo: config.repo,
-      handler_super: Fable.via(config.registry, HandlerSupervisor),
+      handler_super: Fable.via(config.registry, ProcessManagerSupervisor),
       config: config
     }
 
