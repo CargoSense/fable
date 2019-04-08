@@ -1,4 +1,6 @@
 defmodule Fable.Event do
+  import Ecto.Query
+
   defmacro __using__(_) do
     quote do
       use Ecto.Schema
@@ -19,9 +21,11 @@ defmodule Fable.Event do
     field(:inserted_at, :utc_datetime, read_after_writes: true)
   end
 
-  def for_aggregate(schema \\ __MODULE__, %agg{id: id}) do
-    import Ecto.Query
+  def active(queryable) do
+    queryable |> where(active: true)
+  end
 
+  def for_aggregate(schema \\ __MODULE__, %agg{id: id}) do
     table = agg.__schema__(:source)
 
     schema

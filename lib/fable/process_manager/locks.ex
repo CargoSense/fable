@@ -26,7 +26,30 @@ defmodule Fable.ProcessManager.Locks do
       config: config
     }
 
+    notifications = Fable.via(config.registry, Notifications)
+
+    _ = Postgrex.Notifications.listen!(notifications, "event-handler-enabled")
+    _ = Postgrex.Notifications.listen!(notifications, "event-handler-disabled")
+    init_handlers(state)
+
     {:ok, state}
+  end
+
+  defp init_handlers(state) do
+    state.config.process_manager_schema
+    |> Fable.Event.active()
+    |> state.config.repo.all
+    |> Enum.each(&add_handler(&1, state))
+  end
+
+  defp add_handler(handler, state) do
+    spec = Fable.ProcessManager.child_spec(%{config: state.config, name: handler.name})
+
+    {:ok, _} =
+      DynamicSupervisor.start_child(
+        Fable.via(state.config.registry, ProcessManagerSupervisor),
+        spec
+      )
   end
 
   def handle_call({:acquire, name}, {pid, _}, state) do
@@ -64,6 +87,30 @@ defmodule Fable.ProcessManager.Locks do
       else
         state
       end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:notification, _, _, "event-handler-enabled", name}, state) do
+    state.config.process_manager_schema
+    |> state.config.repo.get_by!(name: name)
+    |> add_handler(state)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:notification, _, _, "event-handler-disabled", name}, state) do
+    case Map.fetch(state.names, name) do
+      {:ok, pid} ->
+        :ok =
+          DynamicSupervisor.terminate_child(
+            Fable.via(state.config.registry, ProcessManagerSupervisor),
+            pid
+          )
+
+      _ ->
+        :ok
+    end
 
     {:noreply, state}
   end

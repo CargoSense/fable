@@ -48,10 +48,9 @@ defmodule Fable do
 
     children = [
       {Registry, keys: :unique, name: registry},
-      {__MODULE__.ProcessManager.Locks, config},
       notifications_child(config.repo, notifications_name),
       {DynamicSupervisor, strategy: :one_for_one, name: via(registry, ProcessManagerSupervisor)},
-      {__MODULE__.ProcessManager.Initializer, config}
+      {__MODULE__.ProcessManager.Locks, config}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
