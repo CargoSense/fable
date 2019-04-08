@@ -10,20 +10,23 @@ defmodule Fable do
   `stream_cursors` database table.
   """
 
-  def create_handler(repo, name, module, initial_state) do
+  def create_handler(events, name, module, initial_state) do
+    config = events.__fable_config__
+
     last_event_id =
       case module.start_at(initial_state) do
         :origin ->
           -1
 
         :head ->
-          repo.aggregate(__MODULE__.Event, :max, :id)
+          config.repo.aggregate(config.event_schema, :max, :id)
 
         n when is_integer(n) ->
           n
       end
 
-    %__MODULE__.EventHandler{}
+    config.process_manager_schema
+    |> struct
     |> Ecto.Changeset.change(%{
       last_event_id: last_event_id,
       name: name,
@@ -31,7 +34,7 @@ defmodule Fable do
       state: initial_state
     })
     |> Ecto.Changeset.unique_constraint(:name)
-    |> repo.insert()
+    |> config.repo.insert()
   end
 
   @doc false
@@ -46,8 +49,8 @@ defmodule Fable do
     children = [
       {Registry, keys: :unique, name: registry},
       notifications_child(config.repo, notifications_name),
-      {DynamicSupervisor, strategy: :one_for_one, name: via(registry, HandlerSupervisor)},
-      {__MODULE__.HandlerInitializer, config}
+      {DynamicSupervisor, strategy: :one_for_one, name: via(registry, ProcessManagerSupervisor)},
+      {__MODULE__.ProcessManager.Locks, config}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)

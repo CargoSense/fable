@@ -1,4 +1,4 @@
-defmodule Fable.Handler do
+defmodule Fable.ProcessManager do
   use GenServer
   import Ecto.Query
   require Logger
@@ -10,7 +10,6 @@ defmodule Fable.Handler do
   defstruct [
     :config,
     :listen_ref,
-    :conn,
     :handler,
     :notifications,
     :repo,
@@ -28,21 +27,19 @@ defmodule Fable.Handler do
   end
 
   def disable(repo, name) do
-    Fable.EventHandler
+    Fable.ProcessManager.State
     |> where(name: ^to_string(name))
     |> repo.update_all(set: [active: false])
   end
 
-  def start_link(config) do
-    GenServer.start_link(__MODULE__, config, [])
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts,
+      name: Fable.via(opts.config.registry, {__MODULE__, opts.name})
+    )
   end
 
   def init(%{config: config, name: name}) do
-    Process.flag(:trap_exit, true)
-    {:ok, conn} = Postgrex.start_link(db_config(config.repo))
-
     state = %__MODULE__{
-      conn: conn,
       repo: config.repo,
       config: config,
       name: name,
@@ -114,10 +111,6 @@ defmodule Fable.Handler do
     end
   end
 
-  def handle_info({:EXIT, pid, _reason}, %__MODULE__{conn: pid} = state) do
-    {:stop, :connection_died, state}
-  end
-
   def handle_info({:EXIT, _, :normal}, state) do
     {:noreply, state}
   end
@@ -158,7 +151,7 @@ defmodule Fable.Handler do
     case run_handler(state, event) do
       {:ok, data} ->
         state.handler
-        |> Fable.EventHandler.progress_to(event.id, data)
+        |> Fable.ProcessManager.State.progress_to(event.id, data)
         |> state.repo.update()
         |> case do
           {:ok, handler} ->
@@ -188,7 +181,7 @@ defmodule Fable.Handler do
               Process.send_after(self(), :retry, interval)
 
               state.handler
-              |> Fable.EventHandler.update_state(handler_state)
+              |> Fable.ProcessManager.State.update_state(handler_state)
               |> state.repo.update!()
 
             :stop ->
@@ -244,7 +237,7 @@ defmodule Fable.Handler do
   end
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
-    with %{rows: [[true]]} <- do_lock(state) do
+    with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
       Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 
       ref = Postgrex.Notifications.listen!(state.notifications, "events")
@@ -252,7 +245,7 @@ defmodule Fable.Handler do
       %{
         state
         | listen_ref: ref,
-          handler: state.repo.get_by!(Fable.EventHandler, name: state.name)
+          handler: state.repo.get_by!(state.config.process_manager_schema, name: state.name)
       }
     else
       _ ->
@@ -263,27 +256,5 @@ defmodule Fable.Handler do
 
   defp acquire_lock(state) do
     state
-  end
-
-  @lock_query """
-  SELECT pg_try_advisory_lock($1)
-  FROM event_handlers
-  WHERE name = $2 AND active = true
-  """
-  defp do_lock(%__MODULE__{config: %{registry: namespace}, name: name, conn: conn}) do
-    # The hash here is important because postgres advisory locks are a global
-    # namespace. If some other part of the application is also trying
-    # to take advisory locks based on row ids there's a conflict possible.
-    # By using a hash based on the namespace and name we decrease that probability.
-    lock = :erlang.phash2({namespace, name})
-    Postgrex.query!(conn, @lock_query, [lock, name])
-  end
-
-  defp db_config(repo) do
-    repo.config()
-    |> Keyword.put(:pool_size, 1)
-    # remove the pool so that the sandbox pool
-    # doesn't cause confusion
-    |> Keyword.delete(:pool)
   end
 end

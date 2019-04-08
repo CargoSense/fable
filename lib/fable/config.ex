@@ -8,14 +8,14 @@ defmodule Fable.Config do
     :router,
     repo_opts: [],
     event_schema: Fable.Event,
-    event_handler_schema: Fable.EventHandler,
+    process_manager_schema: Fable.ProcessManager.State,
     json_codec: Jason
   ]
 
   def new(module, attrs) do
     attrs =
       attrs
-      |> Map.new
+      |> Map.new()
       |> Map.put_new(:router, module)
       |> Map.put_new(:registry, Module.concat(Fable, attrs[:repo]))
 
