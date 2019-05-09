@@ -116,7 +116,7 @@ defmodule Fable.ProcessManager do
   end
 
   def handle_info(msg, state) do
-    Logger.error("""
+    Logger.debug("""
     Unexpected message: #{inspect(msg)} #{inspect(state)}
     """)
 
