@@ -1,5 +1,7 @@
 # Fable
 
+Your events have a story to tell
+
 ## Design Philosophy
 
 - Easy to retrofit
