@@ -1,6 +1,9 @@
 defmodule Fable.Event do
   import Ecto.Query
 
+  @type t :: Ecto.Schema.t()
+  @type name :: module()
+
   defmacro __using__(_) do
     quote do
       use Ecto.Schema
