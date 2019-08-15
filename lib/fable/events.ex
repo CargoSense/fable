@@ -10,53 +10,21 @@ defmodule Fable.Events do
 
   ## Options
   * `:repo` - The ecto repository to be used
-  […]
-
-  ## Handlers
-
-  In your events module you need to define a handler callback for each event
-  you emit.
-
-      def handlers do
-        %{
-          MyApp.Aggregate.EventHappened => &MyApp.Aggregate.event_happened/2
-        }
-      end
-
-  Generally you don't want to have all those callbacks be public api though, which
-  is why it's suggested to have those be private within e.g. your context modules
-  and only make them available though a single function specifically for the use
-  with Fable:
-
-      defmodule MyApp.Context do
-        @behaviour Fable.Events
-
-        def handlers do
-          %{
-            MyApp.Context.Aggregate.EventHappened => &event_happened/2
-          }
-        end
-
-        defp event_happened(aggregate, event) do
-          …
-        end
-      end
-
-      defmodule MyApp.Events do
-        use Fable.Events, repo: MyApp.Repo
-
-        def handlers do
-          %{}
-          |> Map.merge(MyApp.Context.handlers())
-          |> Map.merge(MyApp.AnotherContext.handlers())
-        end
-      end
+  * `:registry` - The name of the registry used for the process managers. Defaults to `Fable.` + repo name
+  * `:router` - The module responsible for defining the routing of events. Defaults to `__MODULE__`
+  to their handlers
+  * `:repo_opts` - See `Ecto.Repo`. Defaults to `[]`
+  * `:event_schema` - The schema to be used for persisting events. Defaults to `Fable.Event`
+  * `:process_manager_schema` - The schema to be used for persisting process managers' state. Defaults to `Fable.ProcessManager.State`
+  * `:json_library` - The library used for json encoding. Defaults to `Jason`
 
   ## Emitting events
 
   You can emit events as a standalone action or as part of an
   `Ecto.Multi` pipeline. For both ways you need to pass the resulting term
   to `Repo.transaction` for it to be applied.
+
+  Standalone action:
 
       def create_aggregate(user, args) do
         %MyApp.Aggregate{id: uuid}
@@ -68,6 +36,7 @@ defmodule Fable.Events do
         |> Repo.transaction
       end
 
+  As part of `Ecto.Multi`:
 
       def create_child_on_aggregate(aggregate, user, args) do
         multi =
@@ -87,22 +56,48 @@ defmodule Fable.Events do
         end
       end
 
+  ## Handling events
+
+  By default `MyApp.Events` will also be your router module. Look at `Fable.Router`
+  for more information on that.
+
 
   """
-  @type aggregate_source :: Ecto.Query.t() | Fable.aggregate()
   @type event_or_events :: Fable.Event.t() | [Fable.Event.t()]
   @type emit_callback :: (Ecto.Schema.t(), Ecto.Repo.t(), Ecto.Multi.changes() -> event_or_events)
   @type transation_fun :: (() -> any())
   @type handler ::
           (Fable.aggregate(), Fable.Event.t() -> {:ok, Fable.aggregate()} | {:error, term})
 
-  @callback handlers() :: %{optional(Fable.Event.name()) => handler}
+  @doc """
+  Lists all the events of the aggregate in order.
+  """
+  @callback log(Fable.aggregate()) :: [Fable.Event.t()]
+
+  @doc """
+  Delete the given aggregate and replay all its events, building a new aggregate.
+  """
+  @callback replay(Fable.aggregate()) :: {:ok, Fable.aggregate()} | {:error, term}
+
+  @doc """
+  Creates a function, which emits events for an aggregate when passed to `Repo.transaction`.
+  """
+  @callback emit(Fable.aggregate(), emit_callback, Keyword.t()) :: transation_fun
+
+  @doc """
+  Emit events as step within an `Ecto.Multi` pipeline.
+  """
+  @callback emit(Ecto.Multi.t(), Fable.aggregate(), Ecto.Multi.name(), emit_callback, Keyword.t()) ::
+              Ecto.Multi.t()
 
   defmacro __using__(opts) do
     quote do
       opts = unquote(opts)
-      @behaviour unquote(__MODULE__)
       @__fable_config__ Fable.Config.new(__MODULE__, opts)
+      @behaviour unquote(__MODULE__)
+      if @__fable_config__.router == __MODULE__ do
+        @behaviour Fable.Router
+      end
 
       def child_spec(opts) do
         %{
@@ -134,64 +129,78 @@ defmodule Fable.Events do
         unquote(__MODULE__).replay(@__fable_config__, agg)
       end
 
-      def emit(schema_or_queryable, fun, opts \\ []) do
-        unquote(__MODULE__).emit(@__fable_config__, schema_or_queryable, fun, opts)
+      def emit(aggregate, fun, opts \\ []) do
+        unquote(__MODULE__).emit(@__fable_config__, aggregate, fun, opts)
       end
 
-      def emit(multi, schema_or_queryable, name, fun, opts \\ []) do
-        unquote(__MODULE__).emit(@__fable_config__, multi, schema_or_queryable, name, fun, opts)
+      def emit(multi, aggregate, name, fun, opts \\ []) do
+        unquote(__MODULE__).emit(@__fable_config__, multi, aggregate, name, fun, opts)
       end
 
-      def unconditionally_emit(schema, event_or_events, opts \\ []) do
-        unquote(__MODULE__).unconditionally_emit(@__fable_config__, schema, event_or_events, opts)
+      def unconditionally_emit(aggregate, event_or_events, opts \\ []) do
+        unquote(__MODULE__).unconditionally_emit(
+          @__fable_config__,
+          aggregate,
+          event_or_events,
+          opts
+        )
       end
     end
   end
 
   @doc false
+  @spec replay(Fable.Config.t(), Fable.aggregate()) :: {:ok, Fable.aggregate()} | {:error, term}
   def replay(%{repo: repo} = config, agg) do
     repo.transaction(fn ->
-      agg |> repo.delete!()
-      replay(config, agg, log(config, agg))
+      repo.delete!(agg)
+      do_replay(config, agg, log(config, agg))
     end)
   end
 
-  @doc false
-  def replay(%{repo: repo} = config, %module{id: id}, events) do
+  @spec do_replay(Fable.Config.t(), Fable.aggregate(), [Fable.Event.t()]) :: Fable.aggregate()
+  defp do_replay(%{repo: repo} = config, %aggregate_schema{id: id}, events) do
     import Ecto.Query
 
-    Enum.reduce_while(events, struct!(module, %{id: id}), fn event, prev_agg ->
-      repo.serial(prev_agg, fn prev_agg ->
-        handle(event, prev_agg, config)
-      end)
-      |> case do
-        {:ok, new_agg} ->
-          update_query =
-            where(
-              module,
-              [m],
-              m.id == ^id and
-                (m.last_event_id == ^prev_agg.last_event_id or m.last_event_id == ^event.id or
-                   is_nil(m.last_event_id))
-            )
+    Enum.reduce(events, struct!(aggregate_schema, %{id: id}), fn event, prev_agg ->
+      # Locking should not needed because this is a new aggregate,
+      # which is not yet committed and therefore not known to others.
+      result = handle(event, prev_agg, config)
+      # This won't return on errors, so no need to handle the error case
+      new_agg = rollback_on_error(repo, result)
 
-          case repo.update_all(update_query, set: [last_event_id: event.id]) do
-            {1, _} ->
-              :ok
+      to_be_updated = updateable_rows(prev_agg)
+      update_query = where(aggregate_schema, ^to_be_updated)
 
-            result ->
-              raise """
-              Update failed: #{inspect(update_query)}
-              Got: #{inspect(result)}
-              """
-          end
+      case repo.update_all(update_query, set: [last_event_id: event.id]) do
+        {1, _} ->
+          :ok
 
-          {:cont, %{new_agg | last_event_id: event.id}}
-
-        error ->
-          {:halt, error}
+        result ->
+          raise """
+          Update failed: #{inspect(update_query)}
+          Got: #{inspect(result)}
+          """
       end
+
+      new_agg
     end)
+  end
+
+  defp updateable_rows(%{id: id} = prev_agg) do
+    import Ecto.Query
+
+    aggregate_id_matches = dynamic([agg], agg.id == ^id)
+    empty_last_event_id = dynamic([agg], is_nil(agg.last_event_id))
+
+    prev_agg_and_db_last_event_id_match =
+      dynamic([agg], agg.last_event_id == ^prev_agg.last_event_id)
+
+    # Must those actually be update? Seems like it's already correct
+    # event_id_matches_last_event_id = dynamic([m], m.last_event_id == ^event.id)
+
+    dynamic(
+      ^aggregate_id_matches and (^empty_last_event_id or ^prev_agg_and_db_last_event_id_match)
+    )
   end
 
   @doc false
@@ -206,39 +215,30 @@ defmodule Fable.Events do
   end
 
   @doc false
-  @spec emit(Fable.Config.t(), aggregate_source, event_or_events, Keyword.t()) :: transation_fun
-  def unconditionally_emit(config, schema_or_queryable, event_or_events, opts \\ []) do
-    emit(config, schema_or_queryable, fn _, _, _ -> event_or_events end, opts)
+  @spec unconditionally_emit(Fable.Config.t(), Fable.aggregate(), event_or_events, Keyword.t()) ::
+          transation_fun
+  def unconditionally_emit(config, aggregate, event_or_events, opts \\ []) do
+    emit(config, aggregate, fn _, _, _ -> event_or_events end, opts)
   end
 
   @doc false
-  @spec emit(Fable.Config.t(), aggregate_source, emit_callback, Ecto.Multi.changes(), Keyword.t()) ::
+  @spec emit(
+          Fable.Config.t(),
+          Fable.aggregate(),
+          emit_callback,
+          Ecto.Multi.changes(),
+          Keyword.t()
+        ) ::
           transation_fun
-
-  def emit(config, schema_or_queryable, fun, changes \\ %{}, opts)
-
-  def emit(%{repo: repo} = config, %Ecto.Query{} = queryable, fun, changes, opts)
+  def emit(config, %{__meta__: %Ecto.Schema.Metadata{}} = aggregate, fun, changes \\ %{}, opts)
       when is_function(fun, 3) do
-    fn ->
-      schema = lock(queryable, repo) || raise "No aggregate found"
-      check_schema_fields(schema)
-      rollback_on_error(repo, handle_events(config, schema, fun.(schema, repo, changes), opts))
-    end
-  end
-
-  def emit(
-        %{repo: repo} = config,
-        %{__meta__: %Ecto.Schema.Metadata{}} = schema,
-        fun,
-        changes,
-        opts
-      )
-      when is_function(fun, 3) do
-    check_schema_fields(schema)
+    check_schema_fields(aggregate)
 
     fn ->
-      schema = lock(schema, repo) || schema
-      rollback_on_error(repo, handle_events(config, schema, fun.(schema, repo, changes), opts))
+      aggregate = lock(aggregate, config.repo) || aggregate
+      events = fun.(aggregate, config.repo, changes)
+      result_of_applied_events = handle_events(config, aggregate, events, opts)
+      rollback_on_error(config.repo, result_of_applied_events)
     end
   end
 
@@ -246,37 +246,34 @@ defmodule Fable.Events do
   @spec emit(
           Fable.Config.t(),
           Ecto.Multi.t(),
-          aggregate_source,
-          term(),
+          Fable.aggregate(),
+          Ecto.Multi.name(),
           emit_callback,
           Keyword.t()
         ) ::
           Ecto.Multi.t()
-  def emit(config, multi, schema_or_queryable, name, fun, opts)
+  def emit(%{repo: repo} = config, %Ecto.Multi{} = multi, aggregate, name, fun, opts)
       when is_function(fun, 3) do
-    Ecto.Multi.run(multi, name, fn _repo, changes ->
-      emit(config, schema_or_queryable, fun, changes, opts)
+    Ecto.Multi.run(multi, name, fn ^repo, changes ->
+      emit(config, aggregate, fun, changes, opts)
     end)
   end
 
   @spec handle_events(Fable.Config.t(), Fable.aggregate(), event_or_events, Keyword.t()) ::
           {:ok, Fable.aggregate()} | term
-  defp handle_events(config, aggregate, %_{} = event, opts),
-    do: handle_events(config, aggregate, [event], opts)
-
-  defp handle_events(config, aggregate, events, opts) when is_list(events) do
-    reduce_while_ok(aggregate, events, fn aggregate, event ->
+  defp handle_events(config, aggregate, events, opts) do
+    reduce_while_ok(aggregate, List.wrap(events), fn aggregate, %_{} = event ->
       do_emit(config, aggregate, event, opts)
     end)
   end
 
   @spec do_emit(Fable.Config.t(), Fable.aggregate(), Fable.Event.t(), Keyword.t()) ::
           {:ok, Fable.aggregate()} | {:error, term}
-  defp do_emit(%{repo: repo} = config, %module{id: id} = schema, event, opts) do
-    schema
+  defp do_emit(%{repo: repo} = config, %module{id: id} = aggregate, event, opts) do
+    aggregate
     |> generate(event, config, opts)
     |> repo.insert!()
-    |> handle(schema, config)
+    |> handle(aggregate, config)
     |> case do
       {:ok, %^module{id: ^id} = aggregate} ->
         {:ok, aggregate}
@@ -351,7 +348,7 @@ defmodule Fable.Events do
     """
   end
 
-  @spec lock(aggregate_source, Ecto.Repo.t()) :: Fable.aggregate() | nil
+  @spec lock(Fable.aggregate(), Ecto.Repo.t()) :: Fable.aggregate() | nil
   defp lock(%Ecto.Query{} = query, repo) do
     require Ecto.Query
 
