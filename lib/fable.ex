@@ -1,6 +1,8 @@
 defmodule Fable do
   use Supervisor
 
+  @type aggregate :: Ecto.Schema.t()
+
   @moduledoc """
   Handles the mechanics of event sourcing.
 

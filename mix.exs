@@ -12,6 +12,7 @@ defmodule Fable.MixProject do
       description: "Write simple, event driven applications",
       deps: deps(),
       package: package(),
+      elixirc_paths: elixirc_paths(Mix.env()),
       docs: [
         main: "Fable",
         source_ref: "v#{@version}",
@@ -37,10 +38,14 @@ defmodule Fable.MixProject do
     ]
   end
 
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.16", only: [:dev]},
+      {:ex_doc, "~> 0.21", only: [:dev]},
       {:ecto, "~> 3.0"},
       {:ecto_sql, "~> 3.0"},
       {:postgrex, "~> 0.14.0"},

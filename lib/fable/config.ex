@@ -1,7 +1,17 @@
 defmodule Fable.Config do
-  @moduledoc """
+  # Documented in `Fable.Events`
+  @moduledoc false
 
-  """
+  @type t :: %Fable.Config{
+          repo: Ecto.Repo.t(),
+          registry: module(),
+          router: Fable.Router.t(),
+          repo_opts: Keyword.t(),
+          event_schema: module(),
+          process_manager_schema: module(),
+          json_library: module
+        }
+
   defstruct [
     :repo,
     :registry,
@@ -9,9 +19,10 @@ defmodule Fable.Config do
     repo_opts: [],
     event_schema: Fable.Event,
     process_manager_schema: Fable.ProcessManager.State,
-    json_codec: Jason
+    json_library: Jason
   ]
 
+  @spec new(module(), Enumerable.t()) :: t
   def new(module, attrs) do
     attrs =
       attrs
