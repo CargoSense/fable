@@ -45,5 +45,5 @@ defmodule Fable.Router do
   @doc """
   This function returns a map of routings from event names to their handler callbacks.
   """
-  @callback handlers() :: %{optional(Fable.Event.name()) => Fable.Events.handler()}
+  @callback handlers() :: %{optional(Fable.Event.name()) => Fable.Events.handler() | [Fable.Events.handler()]}
 end
