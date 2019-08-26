@@ -28,8 +28,8 @@ defmodule Fable.ProcessManager.Locks do
 
     notifications = Fable.via(config.registry, Notifications)
 
-    _ = Postgrex.Notifications.listen!(notifications, "event-handler-enabled")
-    _ = Postgrex.Notifications.listen!(notifications, "event-handler-disabled")
+    _ = Postgrex.Notifications.listen!(notifications, "process-manager-enabled")
+    _ = Postgrex.Notifications.listen!(notifications, "process-manager-disabled")
     init_handlers(state)
 
     {:ok, state}
@@ -91,7 +91,7 @@ defmodule Fable.ProcessManager.Locks do
     {:noreply, state}
   end
 
-  def handle_info({:notification, _, _, "event-handler-enabled", name}, state) do
+  def handle_info({:notification, _, _, "process-manager-enabled", name}, state) do
     state.config.process_manager_schema
     |> state.config.repo.get_by!(name: name)
     |> add_handler(state)
@@ -99,7 +99,7 @@ defmodule Fable.ProcessManager.Locks do
     {:noreply, state}
   end
 
-  def handle_info({:notification, _, _, "event-handler-disabled", name}, state) do
+  def handle_info({:notification, _, _, "process-manager-disabled", name}, state) do
     case Map.fetch(state.names, name) do
       {:ok, pid} ->
         :ok =
