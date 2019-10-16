@@ -256,6 +256,7 @@ defmodule Fable.Events do
       when is_function(fun, 3) do
     Ecto.Multi.run(multi, name, fn ^repo, changes ->
       emit(config, aggregate, fun, changes, opts)
+      |> repo.transaction()
     end)
   end
 
