@@ -193,7 +193,19 @@ defmodule Fable.Events do
     empty_last_event_id = dynamic([agg], is_nil(agg.last_event_id))
 
     prev_agg_and_db_last_event_id_match =
-      dynamic([agg], agg.last_event_id == ^prev_agg.last_event_id)
+      case prev_agg.last_event_id do
+        nil ->
+          dynamic(
+            [agg],
+            is_nil(agg.last_event_id) == is_nil(^prev_agg.last_event_id)
+          )
+
+        _ ->
+          dynamic(
+            [agg],
+            agg.last_event_id == ^prev_agg.last_event_id
+          )
+      end
 
     # Must those actually be update? Seems like it's already correct
     # event_id_matches_last_event_id = dynamic([m], m.last_event_id == ^event.id)
