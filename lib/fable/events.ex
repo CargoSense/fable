@@ -93,7 +93,6 @@ defmodule Fable.Events do
   defmacro __using__(opts) do
     quote do
       opts = unquote(opts)
-      {except, opts} = Keyword.pop(opts, :except, [])
       @__fable_config__ Fable.Config.new(__MODULE__, opts)
       @behaviour unquote(__MODULE__)
       if @__fable_config__.router == __MODULE__ do
@@ -122,28 +121,20 @@ defmodule Fable.Events do
         Supervisor.start_link(Fable, __fable_config__(), [])
       end
 
-      unless Enum.member?(except, :log) do
-        def log(schema) do
-          unquote(__MODULE__).log(@__fable_config__, schema)
-        end
+      def log(schema) do
+        unquote(__MODULE__).log(@__fable_config__, schema)
       end
 
-      unless Enum.member?(except, :replay) do
-        def replay(agg) do
-          unquote(__MODULE__).replay(@__fable_config__, agg)
-        end
+      def replay(agg) do
+        unquote(__MODULE__).replay(@__fable_config__, agg)
       end
 
-      unless Enum.member?(except, :emit) do
-        def emit(aggregate, fun, opts \\ []) do
-          unquote(__MODULE__).emit(@__fable_config__, aggregate, fun, opts)
-        end
+      def emit(aggregate, fun, opts \\ []) do
+        unquote(__MODULE__).emit(@__fable_config__, aggregate, fun, opts)
       end
 
-      unless Enum.member?(except, :emit) do
-        def emit(multi, aggregate, name, fun, opts \\ []) do
-          unquote(__MODULE__).emit(@__fable_config__, multi, aggregate, name, fun, opts)
-        end
+      def emit(multi, aggregate, name, fun, opts \\ []) do
+        unquote(__MODULE__).emit(@__fable_config__, multi, aggregate, name, fun, opts)
       end
 
       def unconditionally_emit(aggregate, event_or_events, opts \\ []) do
@@ -154,6 +145,8 @@ defmodule Fable.Events do
           opts
         )
       end
+
+      defoverridable emit: 3, emit: 4, emit: 5
     end
   end
 
