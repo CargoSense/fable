@@ -239,16 +239,29 @@ defmodule Fable.Events do
           Keyword.t()
         ) ::
           transation_fun
-  def emit(config, %{__meta__: %Ecto.Schema.Metadata{}} = aggregate, fun, changes \\ %{}, opts)
-      when is_function(fun, 3) do
+  def emit(config, %{__meta__: %Ecto.Schema.Metadata{}} = aggregate, fun, changes \\ %{}, opts) do
     check_schema_fields(aggregate)
 
     fn ->
       aggregate = lock(aggregate, config.repo) || aggregate
-      events = fun.(aggregate, config.repo, changes)
-      result_of_applied_events = handle_events(config, aggregate, events, opts)
-      rollback_on_error(config.repo, result_of_applied_events)
+
+      case call_fun(fun, aggregate, config, changes) do
+        {:error, reason} ->
+          config.repo.rollback(reason)
+
+        events ->
+          result_of_applied_events = handle_events(config, aggregate, events, opts)
+          rollback_on_error(config.repo, result_of_applied_events)
+      end
     end
+  end
+
+  defp call_fun(fun, aggregate, config, _changes) when is_function(fun, 2) do
+    fun.(aggregate, config.repo)
+  end
+
+  defp call_fun(fun, aggregate, config, changes) when is_function(fun, 3) do
+    fun.(aggregate, config.repo, changes)
   end
 
   @doc false
@@ -261,8 +274,7 @@ defmodule Fable.Events do
           Keyword.t()
         ) ::
           Ecto.Multi.t()
-  def emit(%{repo: repo} = config, %Ecto.Multi{} = multi, aggregate, name, fun, opts)
-      when is_function(fun, 3) do
+  def emit(%{repo: repo} = config, %Ecto.Multi{} = multi, aggregate, name, fun, opts) do
     Ecto.Multi.run(multi, name, fn ^repo, changes ->
       emit(config, aggregate, fun, changes, opts)
       |> repo.transaction()
