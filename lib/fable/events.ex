@@ -256,10 +256,6 @@ defmodule Fable.Events do
     end
   end
 
-  defp call_fun(fun, aggregate, _config, _changes) when is_function(fun, 1) do
-    fun.(aggregate)
-  end
-
   defp call_fun(fun, aggregate, config, _changes) when is_function(fun, 2) do
     fun.(aggregate, config.repo)
   end
