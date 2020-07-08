@@ -46,8 +46,7 @@ defmodule Fable.MixProject do
   defp deps do
     [
       {:ex_doc, "~> 0.21", only: [:dev]},
-      {:ecto, "~> 3.0"},
-      {:ecto_sql, "~> 3.0"},
+      {:ecto_sql, "~> 3.2"},
       {:postgrex, "~> 0.14"},
       {:jason, "~> 1.1", optional: true}
     ]
