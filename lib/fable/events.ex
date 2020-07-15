@@ -9,11 +9,9 @@ defmodule Fable.Events do
       end
 
   ## Options
-  * `:repo` - The ecto repository to be used
   * `:registry` - The name of the registry used for the process managers. Defaults to `Fable.` + repo name
   * `:router` - The module responsible for defining the routing of events. Defaults to `__MODULE__`
   to their handlers
-  * `:repo_opts` - See `Ecto.Repo`. Defaults to `[]`
   * `:event_schema` - The schema to be used for persisting events. Defaults to `Fable.Event`
   * `:process_manager_schema` - The schema to be used for persisting process managers' state. Defaults to `Fable.ProcessManager.State`
   * `:json_library` - The library used for json encoding. Defaults to `Jason`
@@ -65,7 +63,7 @@ defmodule Fable.Events do
   """
   @type event_or_events :: Fable.Event.t() | [Fable.Event.t()]
   @type emit_callback :: (Ecto.Schema.t(), Ecto.Repo.t(), Ecto.Multi.changes() -> event_or_events)
-  @type transation_fun :: (() -> any())
+  @type transation_fun :: (Ecto.Repo.t() -> any())
   @type handler ::
           (Fable.aggregate(), Fable.Event.t() -> {:ok, Fable.aggregate()} | {:error, term})
 
@@ -77,7 +75,8 @@ defmodule Fable.Events do
   @doc """
   Delete the given aggregate and replay all its events, building a new aggregate.
   """
-  @callback replay(Fable.aggregate()) :: {:ok, Fable.aggregate()} | {:error, term}
+  @callback replay(repo :: Ecto.Repo.t(), Fable.aggregate()) ::
+              {:ok, Fable.aggregate()} | {:error, term}
 
   @doc """
   Creates a function, which emits events for an aggregate when passed to `Repo.transaction`.
@@ -125,8 +124,8 @@ defmodule Fable.Events do
         unquote(__MODULE__).log(@__fable_config__, schema)
       end
 
-      def replay(agg) do
-        unquote(__MODULE__).replay(@__fable_config__, agg)
+      def replay(repo, agg) do
+        unquote(__MODULE__).replay(repo, @__fable_config__, agg)
       end
 
       def emit(aggregate, fun, opts \\ []) do
@@ -149,8 +148,11 @@ defmodule Fable.Events do
   end
 
   @doc false
-  @spec replay(Fable.Config.t(), Fable.aggregate()) :: {:ok, Fable.aggregate()} | {:error, term}
-  def replay(%{repo: repo} = config, agg) do
+  @spec replay(Ecto.Repo.t(), Fable.Config.t(), Fable.aggregate()) ::
+          {:ok, Fable.aggregate()} | {:error, term}
+  def replay(repo, config, agg) do
+    config = Map.put(config, :repo, repo)
+
     repo.transaction(fn ->
       repo.delete!(agg)
       do_replay(config, agg, log(config, agg))
@@ -243,11 +245,12 @@ defmodule Fable.Events do
       when is_function(fun, 3) do
     check_schema_fields(aggregate)
 
-    fn ->
-      aggregate = lock(aggregate, config.repo) || aggregate
-      events = fun.(aggregate, config.repo, changes)
+    fn repo ->
+      config = Map.put(config, :repo, repo)
+      aggregate = lock(aggregate, repo) || aggregate
+      events = fun.(aggregate, repo, changes)
       result_of_applied_events = handle_events(config, aggregate, events, opts)
-      rollback_on_error(config.repo, result_of_applied_events)
+      rollback_on_error(repo, result_of_applied_events)
     end
   end
 
@@ -261,9 +264,9 @@ defmodule Fable.Events do
           Keyword.t()
         ) ::
           Ecto.Multi.t()
-  def emit(%{repo: repo} = config, %Ecto.Multi{} = multi, aggregate, name, fun, opts)
+  def emit(config, %Ecto.Multi{} = multi, aggregate, name, fun, opts)
       when is_function(fun, 3) do
-    Ecto.Multi.run(multi, name, fn ^repo, changes ->
+    Ecto.Multi.run(multi, name, fn repo, changes ->
       emit(config, aggregate, fun, changes, opts)
       |> repo.transaction()
     end)

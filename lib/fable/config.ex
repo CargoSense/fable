@@ -6,7 +6,6 @@ defmodule Fable.Config do
           repo: Ecto.Repo.t(),
           registry: module(),
           router: Fable.Router.t(),
-          repo_opts: Keyword.t(),
           event_schema: module(),
           process_manager_schema: module(),
           json_library: module
@@ -16,7 +15,6 @@ defmodule Fable.Config do
     :repo,
     :registry,
     :router,
-    repo_opts: [],
     event_schema: Fable.Event,
     process_manager_schema: Fable.ProcessManager.State,
     json_library: Jason
