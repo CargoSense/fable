@@ -18,7 +18,7 @@ defmodule Fable.Migrations do
 
     execute(
       """
-      create or replace function fn_trigger_last_event_update(_tbl regclass) returns trigger
+      create or replace function fn_trigger_last_event_update() returns trigger
       security definer
       language plpgsql
       as $$
@@ -31,7 +31,7 @@ defmodule Fable.Migrations do
           event_json text := json_build_object(
             'aggregate_id', NEW.aggregate_id,
             'aggregate_table', NEW.aggregate_table,
-            'events_table', _tbl,
+            'events_table', TG_TABLE_NAME,
             'id', NEW.id
           );
           update_aggregate text := format(
@@ -66,7 +66,7 @@ defmodule Fable.Migrations do
       """
       create trigger event_insert_update_last_event_id after insert on #{table}
       for each row
-        execute procedure fn_trigger_last_event_update(#{table})
+        execute procedure fn_trigger_last_event_update()
       """,
       "drop trigger event_insert_update_last_event_id ON #{table}"
     )
