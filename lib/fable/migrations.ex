@@ -1,7 +1,7 @@
-defmodule Fable.Migrations.CreateEvents do
+defmodule Fable.Migrations do
   use Ecto.Migration
 
-  def change(table) do
+  def events_table(table) do
     create table(table, primary_key: false) do
       add(:id, :bigserial, primary_key: true)
       add(:prev_event_id, :integer)
