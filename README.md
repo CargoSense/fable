@@ -237,5 +237,4 @@ end
 The import thing to note here is that the aggregate (the post) will need the
 `:last_event_id` field being added on the schema and in the db. But also it needs
 to have an id, before events can be applied to it. This is simple for uuid based
-ids as shown. Using integer based ids might work by querying the db, but will 
-result in a race conditions.
+ids as shown. Using integer based ids is not supported right now.
