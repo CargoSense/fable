@@ -12,7 +12,7 @@ defmodule Fable.Events do
   * `:registry` - The name of the registry used for the process managers. Defaults to `Fable.` + repo name
   * `:router` - The module responsible for defining the routing of events. Defaults to `__MODULE__`
   to their handlers
-  * `:event_schema` - The schema to be used for persisting events. Defaults to `Fable.Event`
+  * `:event_schema` - The schema to be used for persisting events. Defaults to `{"events", Fable.Event}`
   * `:process_manager_schema` - The schema to be used for persisting process managers' state. Defaults to `Fable.ProcessManager.State`
   * `:json_library` - The library used for json encoding. Defaults to `Jason`
 
@@ -336,7 +336,10 @@ defmodule Fable.Events do
       meta: Keyword.get(opts, :meta, %{})
     }
 
-    config.event_schema
+    case config.event_schema do
+      {_table, schema} -> schema
+      schema -> schema
+    end
     |> struct()
     |> Ecto.Changeset.cast(attrs, Map.keys(attrs))
   end
