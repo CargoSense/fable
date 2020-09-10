@@ -337,10 +337,9 @@ defmodule Fable.Events do
     }
 
     case config.event_schema do
-      {_table, schema} -> schema
-      schema -> schema
+      {table, schema} -> schema |> struct() |> Ecto.put_meta(source: table)
+      schema -> schema |> struct()
     end
-    |> struct()
     |> Ecto.Changeset.cast(attrs, Map.keys(attrs))
   end
 
