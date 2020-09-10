@@ -1,11 +1,13 @@
 defmodule Fable.Migrations do
   use Ecto.Migration
 
-  def events_table(table) do
+  def events_table(table, opts \\ []) do
+    aggregate_type = Keyword.get(opts, :aggregate_type, :uuid)
+
     create table(table, primary_key: false) do
       add(:id, :bigserial, primary_key: true)
       add(:prev_event_id, :integer)
-      add(:aggregate_id, :uuid, null: false)
+      add(:aggregate_id, aggregate_type, null: false)
       add(:aggregate_table, :string, null: false)
       add(:type, :string, null: false)
       add(:version, :integer, null: false)
@@ -24,7 +26,7 @@ defmodule Fable.Migrations do
       as $$
         DECLARE
           rcount int;
-          result uuid;
+          result #{aggregate_type};
           find_aggregate text := format(
             'SELECT id FROM %I WHERE id = $1', NEW.aggregate_table
           );
