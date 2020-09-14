@@ -234,7 +234,7 @@ defmodule MyApp.Blog.Post do
 end
 ```
 
-The import thing to note here is that the aggregate (the post) will need the
+The important thing to note here is that the aggregate (the post) will need the
 `:last_event_id` field being added on the schema and in the db. But also it needs
 to have an id, before events can be applied to it. This is simple for uuid based
 ids as shown. Using integer based ids is supported, but initial creation cannot be 
