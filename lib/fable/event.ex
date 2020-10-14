@@ -43,8 +43,7 @@ defmodule Fable.Event do
   end
 
   defp event_ecto_spec(module) do
-    {:embed,
-     %Ecto.Embedded{
+    struct = %Ecto.Embedded{
        cardinality: :one,
        field: :data,
        on_cast: nil,
@@ -52,6 +51,25 @@ defmodule Fable.Event do
        owner: __MODULE__,
        related: module,
        unique: true
-     }}
+     }
+     
+    if dependency_vsn_match?(:ecto, "~> 3.5") do
+      {:parameterized, Ecto.Embedded, struct}
+    else
+      {:embed, struct}
+    end
+  end
+  
+  @spec dependency_vsn_match?(atom(), binary()) :: boolean()
+  defp dependency_vsn_match?(dep, req) do
+    case Application.spec(dep, :vsn) do
+      {:ok, actual} ->
+        actual
+        |> List.to_string()
+        |> Version.match?(req)
+
+      _any ->
+        false
+    end
   end
 end
