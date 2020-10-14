@@ -62,7 +62,7 @@ defmodule Fable.Event do
   
   @spec dependency_vsn_match?(atom(), binary()) :: boolean()
   defp dependency_vsn_match?(dep, req) do
-    case Application.spec(dep, :vsn) do
+    case :application.get_key(dep, :vsn) do
       {:ok, actual} ->
         actual
         |> List.to_string()
