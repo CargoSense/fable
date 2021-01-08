@@ -242,13 +242,20 @@ defmodule Fable.Events do
         ) ::
           transation_fun
   def emit(config, %{__meta__: %Ecto.Schema.Metadata{}} = aggregate, fun, changes \\ %{}, opts)
-      when is_function(fun, 3) do
+      when is_function(fun, 3) or is_function(fun, 2) do
     check_schema_fields(aggregate)
 
     fn repo ->
       config = Map.put(config, :repo, repo)
       aggregate = lock(aggregate, repo) || aggregate
-      events = fun.(aggregate, repo, changes)
+
+      events = case fun do
+        fun when is_function(fun, 3) ->
+          fun.(aggregate, repo, changes)
+        fun when is_function(fun, 2) ->
+          fun.(aggregate, repo)
+        end
+
       result_of_applied_events = handle_events(config, aggregate, events, opts)
       rollback_on_error(repo, result_of_applied_events)
     end

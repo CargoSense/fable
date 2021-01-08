@@ -1,13 +1,13 @@
 defmodule Fable.MixProject do
   use Mix.Project
 
-  @version "0.0.1-alpha.0"
+  @version "0.0.1-alpha.1"
 
   def project do
     [
       app: :fable,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       description: "Write simple, event driven applications",
       deps: deps(),
