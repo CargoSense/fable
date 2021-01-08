@@ -25,5 +25,6 @@ defmodule Fable.ProcessManager.State do
     handler
     |> update_state(state)
     |> optimistic_lock(:last_event_id, fn _ -> last_event_id end)
+    |> change(last_event_id: last_event_id)
   end
 end

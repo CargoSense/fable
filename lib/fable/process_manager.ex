@@ -136,10 +136,10 @@ defmodule Fable.ProcessManager do
         # there may be more, keep going until it looks
         # like we're at the HEAD
         if length(events) == state.batch_size do
-          process_events(state)
-        else
-          {:ok, state}
+          send(self(), :retry)
         end
+
+        {:ok, state}
     end
   end
 
