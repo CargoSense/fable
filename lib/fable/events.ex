@@ -144,6 +144,8 @@ defmodule Fable.Events do
           opts
         )
       end
+
+      defoverridable emit: 3, emit: 4, emit: 5
     end
   end
 
