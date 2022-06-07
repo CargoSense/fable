@@ -15,10 +15,10 @@ defmodule Fable.Event do
 
   schema "events" do
     field(:prev_event_id, :integer)
-    field(:aggregate_id, Ecto.UUID, null: false)
-    field(:aggregate_table, :string, null: false)
-    field(:type, :string, null: false)
-    field(:version, :integer, null: false)
+    field(:aggregate_id, Ecto.UUID)
+    field(:aggregate_table, :string)
+    field(:type, :string)
+    field(:version, :integer)
     field(:meta, :map, default: %{})
     field(:data, :map, default: %{})
     field(:inserted_at, :utc_datetime, read_after_writes: true)
