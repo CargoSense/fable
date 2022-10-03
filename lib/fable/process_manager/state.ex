@@ -6,8 +6,8 @@ defmodule Fable.ProcessManager.State do
 
   schema "process_managers" do
     field(:last_event_id, :integer, read_after_writes: true)
-    field(:name, :string, null: false)
-    field(:module, Fable.ModuleColumn, null: false)
+    field(:name, :string)
+    field(:module, Fable.ModuleColumn)
     field(:state, :map, default: %{})
     field(:active, :boolean, read_after_writes: true)
     timestamps(type: :utc_datetime_usec)
