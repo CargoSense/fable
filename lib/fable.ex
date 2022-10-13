@@ -12,8 +12,17 @@ defmodule Fable do
   `stream_cursors` database table.
   """
 
+  @doc """
+  Creates a new handler for a [`ProcessManager`](`Fable.ProcessManager`).
+
+  ## Examples
+
+      Fable.create_handler(MyApp.Events, :pm, MyApp.ProcessManager, %{})
+      # => {:ok, %Fable.ProcessManager.State{}}
+  """
+
   def create_handler(events, name, module, initial_state) do
-    config = events.__fable_config__
+    config = events.__fable_config__()
 
     last_event_id =
       case module.start_at(initial_state) do
