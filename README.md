@@ -157,7 +157,7 @@ defmodule MyApp.Blog do
   @impl Fable.Router
   def handlers do
     %{
-      Events.PostCreated => &post_created/2
+      Events.PostCreated => &post_created/2,
       Events.PostUpdated => &post_updated/2
     }
   end
