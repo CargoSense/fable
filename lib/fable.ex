@@ -12,8 +12,17 @@ defmodule Fable do
   `stream_cursors` database table.
   """
 
+  @doc """
+  Creates a new handler for a [`ProcessManager`](`Fable.ProcessManager`).
+
+  ## Examples
+
+      Fable.create_handler(MyApp.Events, :pm, MyApp.ProcessManager, %{})
+      # => {:ok, %Fable.ProcessManager.State{}}
+  """
+
   def create_handler(events, name, module, initial_state) do
-    config = events.__fable_config__
+    config = events.__fable_config__()
 
     last_event_id =
       case module.start_at(initial_state) do
@@ -46,16 +55,28 @@ defmodule Fable do
 
   @doc false
   def init(%{registry: registry} = config) do
+    children =
+      List.flatten([
+        {Registry, keys: :unique, name: registry},
+        process_manager_children(config.process_manager_mode, config)
+      ])
+
+    Supervisor.init(children, strategy: :rest_for_one)
+  end
+
+  defp process_manager_children(:notify, config) do
+    %{registry: registry} = config
     notifications_name = via(registry, Notifications)
 
-    children = [
-      {Registry, keys: :unique, name: registry},
+    [
       notifications_child(config.repo, notifications_name),
       {DynamicSupervisor, strategy: :one_for_one, name: via(registry, ProcessManagerSupervisor)},
       {__MODULE__.ProcessManager.Locks, config}
     ]
+  end
 
-    Supervisor.init(children, strategy: :rest_for_one)
+  defp process_manager_children(:sync, _config) do
+    []
   end
 
   defp notifications_child(repo, name) do

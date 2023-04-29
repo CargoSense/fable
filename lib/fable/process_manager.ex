@@ -148,84 +148,18 @@ defmodule Fable.ProcessManager do
   end
 
   defp handle_event(event, state) do
-    case run_handler(state, event) do
-      {:ok, data} ->
-        state.handler
-        |> Fable.ProcessManager.State.progress_to(event.id, data)
-        |> state.repo.update()
-        |> case do
-          {:ok, handler} ->
-            {:cont, %__MODULE__{state | handler: handler}}
+    case Fable.ProcessManager.Workflow.execute(state.handler, event, state.repo) do
+      {:ok, handler} ->
+        {:cont, %__MODULE__{state | handler: handler}}
 
-          {:error, error} ->
-            Logger.error("""
-            Handler #{state.handler.name} handler error:
-            #{inspect(error)}
-            Stopping!
-            """)
-
-            disable(state.repo, state.handler.name)
-            {:halt, %{state | handler: nil}}
-        end
-
-      error ->
-        Logger.error("""
-        Handler #{state.handler.name} error:
-        #{inspect(error)}
-        """)
-
-        handler =
-          case apply(state.handler.module, :handle_error, [event, error, state.handler.state]) do
-            {:retry, interval, handler_state} ->
-              Logger.info("Handler #{state.handler.name} retrying in #{interval}...")
-              Process.send_after(self(), :retry, interval)
-
-              state.handler
-              |> Fable.ProcessManager.State.update_state(handler_state)
-              |> state.repo.update!()
-
-            :stop ->
-              Logger.error("""
-              Handler #{state.handler.name} stopped!
-              Manual intervention required!
-              """)
-
-              disable(state.repo, state.handler.name)
-
-              nil
-
-            other ->
-              Logger.error("""
-              Handler #{state.handler.name} failed to handle error!
-              Returned: #{inspect(other)}
-              Manual intervention required!
-              """)
-
-              disable(state.repo, state.handler.name)
-
-              nil
-          end
-
+      {:retry, interval, handler} ->
+        Logger.info("Handler #{state.handler.name} retrying in #{interval}...")
+        Process.send_after(self(), :retry, interval)
         {:halt, %{state | handler: handler}}
+
+      :stop ->
+        {:halt, %{state | handler: nil}}
     end
-  end
-
-  defp run_handler(state, event) do
-    Logger.debug("""
-    Handler #{state.handler.name} handling: #{inspect(event)}
-    """)
-
-    event = Fable.Event.parse_data(state.repo, event)
-    apply(state.handler.module, :handle_event, [event.data, state.handler.state])
-  rescue
-    e ->
-      Logger.error("""
-      Handler #{state.handler.name} raised exception!
-      #{inspect(e)}
-      #{Exception.format_stacktrace(__STACKTRACE__)}
-      """)
-
-      {:error, e}
   end
 
   defp get_events(state) do

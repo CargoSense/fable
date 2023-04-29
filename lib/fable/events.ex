@@ -249,11 +249,13 @@ defmodule Fable.Events do
       config = Map.put(config, :repo, repo)
       aggregate = lock(aggregate, repo) || aggregate
 
-      events = case fun do
-        fun when is_function(fun, 3) ->
-          fun.(aggregate, repo, changes)
-        fun when is_function(fun, 2) ->
-          fun.(aggregate, repo)
+      events =
+        case fun do
+          fun when is_function(fun, 3) ->
+            fun.(aggregate, repo, changes)
+
+          fun when is_function(fun, 2) ->
+            fun.(aggregate, repo)
         end
 
       result_of_applied_events = handle_events(config, aggregate, events, opts)
@@ -316,14 +318,20 @@ defmodule Fable.Events do
 
     event = Fable.Event.parse_data(repo, event)
 
-    case Map.fetch!(config.router.handlers(), Module.safe_concat([event.type])) do
-      functions when is_list(functions) ->
-        reduce_while_ok(aggregate, functions, fn aggregate, function ->
-          function.(aggregate, event.data)
-        end)
+    result =
+      case Map.fetch!(config.router.handlers(), Module.safe_concat([event.type])) do
+        functions when is_list(functions) ->
+          reduce_while_ok(aggregate, functions, fn aggregate, function ->
+            function.(aggregate, event.data)
+          end)
 
-      function when is_function(function) ->
-        function.(aggregate, event.data)
+        function when is_function(function) ->
+          function.(aggregate, event.data)
+      end
+
+    with {:ok, _} <- result do
+      :ok = sync_process_managers(config, repo, event)
+      result
     end
   end
 
@@ -347,6 +355,20 @@ defmodule Fable.Events do
     |> struct()
     |> Ecto.Changeset.cast(attrs, Map.keys(attrs))
   end
+
+  @spec sync_process_managers(Fable.Config.t(), Ecto.Repo.t(), Fable.Event.t()) :: :ok
+  defp sync_process_managers(%{process_manager_mode: :sync} = config, repo, event) do
+    config.process_manager_schema
+    |> Fable.Event.active()
+    |> repo.all()
+    |> Enum.each(fn pm ->
+      Fable.ProcessManager.Workflow.execute!(pm, event, repo)
+    end)
+
+    :ok
+  end
+
+  defp sync_process_managers(_config, _repo, _aggregate), do: :ok
 
   @spec rollback_on_error(Ecto.Repo.t(), {:ok | :error, term}) :: term | no_return
   defp rollback_on_error(repo, {:error, error}) do
