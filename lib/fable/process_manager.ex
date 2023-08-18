@@ -148,66 +148,68 @@ defmodule Fable.ProcessManager do
   end
 
   defp handle_event(event, state) do
-    case run_handler(state, event) do
-      {:ok, data} ->
-        state.handler
-        |> Fable.ProcessManager.State.progress_to(event.id, data)
-        |> state.repo.update()
-        |> case do
-          {:ok, handler} ->
-            {:cont, %__MODULE__{state | handler: handler}}
+    :telemetry.span([:fable, :process_manager, :handle_event], %{handler: state.handler}, fn ->
+      case run_handler(state, event) do
+        {:ok, data} ->
+          state.handler
+          |> Fable.ProcessManager.State.progress_to(event.id, data)
+          |> state.repo.update()
+          |> case do
+            {:ok, handler} ->
+              {:cont, %__MODULE__{state | handler: handler}}
 
-          {:error, error} ->
-            Logger.error("""
-            Handler #{state.handler.name} handler error:
-            #{inspect(error)}
-            Stopping!
-            """)
-
-            disable(state.repo, state.handler.name)
-            {:halt, %{state | handler: nil}}
-        end
-
-      error ->
-        Logger.error("""
-        Handler #{state.handler.name} error:
-        #{inspect(error)}
-        """)
-
-        handler =
-          case apply(state.handler.module, :handle_error, [event, error, state.handler.state]) do
-            {:retry, interval, handler_state} ->
-              Logger.info("Handler #{state.handler.name} retrying in #{interval}...")
-              Process.send_after(self(), :retry, interval)
-
-              state.handler
-              |> Fable.ProcessManager.State.update_state(handler_state)
-              |> state.repo.update!()
-
-            :stop ->
+            {:error, error} ->
               Logger.error("""
-              Handler #{state.handler.name} stopped!
-              Manual intervention required!
+              Handler #{state.handler.name} handler error:
+              #{inspect(error)}
+              Stopping!
               """)
 
               disable(state.repo, state.handler.name)
-
-              nil
-
-            other ->
-              Logger.error("""
-              Handler #{state.handler.name} failed to handle error!
-              Returned: #{inspect(other)}
-              Manual intervention required!
-              """)
-
-              disable(state.repo, state.handler.name)
-
-              nil
+              {:halt, %{state | handler: nil}}
           end
 
-        {:halt, %{state | handler: handler}}
-    end
+        error ->
+          Logger.error("""
+          Handler #{state.handler.name} error:
+          #{inspect(error)}
+          """)
+
+          handler =
+            case apply(state.handler.module, :handle_error, [event, error, state.handler.state]) do
+              {:retry, interval, handler_state} ->
+                Logger.info("Handler #{state.handler.name} retrying in #{interval}...")
+                Process.send_after(self(), :retry, interval)
+
+                state.handler
+                |> Fable.ProcessManager.State.update_state(handler_state)
+                |> state.repo.update!()
+
+              :stop ->
+                Logger.error("""
+                Handler #{state.handler.name} stopped!
+                Manual intervention required!
+                """)
+
+                disable(state.repo, state.handler.name)
+
+                nil
+
+              other ->
+                Logger.error("""
+                Handler #{state.handler.name} failed to handle error!
+                Returned: #{inspect(other)}
+                Manual intervention required!
+                """)
+
+                disable(state.repo, state.handler.name)
+
+                nil
+            end
+
+          {:halt, %{state | handler: handler}}
+      end
+    end)
   end
 
   defp run_handler(state, event) do
@@ -229,29 +231,33 @@ defmodule Fable.ProcessManager do
   end
 
   defp get_events(state) do
-    state.config.event_schema
-    |> where([e], e.id > ^state.handler.last_event_id)
-    |> order_by(asc: :id)
-    |> limit(^state.batch_size)
-    |> state.repo.all()
+    :telemetry.span([:fable, :process_manager, :get_events], %{handler: state.handler}, fn ->
+      state.config.event_schema
+      |> where([e], e.id > ^state.handler.last_event_id)
+      |> order_by(asc: :id)
+      |> limit(^state.batch_size)
+      |> state.repo.all()
+    end)
   end
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
-    with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
-      Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
+    :telemetry.span([:fable, :process_manager, :acquire_lock], %{}, fn ->
+      with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
+        Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 
-      ref = Postgrex.Notifications.listen!(state.notifications, "events")
+        ref = Postgrex.Notifications.listen!(state.notifications, "events")
 
-      %{
-        state
-        | listen_ref: ref,
-          handler: state.repo.get_by!(state.config.process_manager_schema, name: state.name)
-      }
-    else
-      _ ->
-        Process.send_after(self(), :acquire_lock, 5_000)
-        state
-    end
+        %{
+          state
+          | listen_ref: ref,
+            handler: state.repo.get_by!(state.config.process_manager_schema, name: state.name)
+        }
+      else
+        _ ->
+          Process.send_after(self(), :acquire_lock, 5_000)
+          state
+      end
+    end)
   end
 
   defp acquire_lock(state) do
