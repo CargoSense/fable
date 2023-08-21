@@ -241,7 +241,7 @@ defmodule Fable.ProcessManager do
         |> where([e], e.id > ^state.handler.last_event_id)
         |> order_by(asc: :id)
         |> limit(^state.batch_size)
-        |> state.repo.all()
+        |> state.repo.all(repo_telemetry_opts())
 
       {result, %{}}
     end)
