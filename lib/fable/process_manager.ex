@@ -29,7 +29,7 @@ defmodule Fable.ProcessManager do
   def disable(repo, name) do
     Fable.ProcessManager.State
     |> where(name: ^to_string(name))
-    |> repo.update_all(set: [active: false])
+    |> repo.update_all([set: [active: false]], repo_telemetry_opts())
   end
 
   def start_link(opts) do
@@ -153,7 +153,7 @@ defmodule Fable.ProcessManager do
         {:ok, data} ->
           state.handler
           |> Fable.ProcessManager.State.progress_to(event.id, data)
-          |> state.repo.update()
+          |> state.repo.update(repo_telemetry_opts())
           |> case do
             {:ok, handler} ->
               {:cont, %__MODULE__{state | handler: handler}}
@@ -183,7 +183,7 @@ defmodule Fable.ProcessManager do
 
                 state.handler
                 |> Fable.ProcessManager.State.update_state(handler_state)
-                |> state.repo.update!()
+                |> state.repo.update!(repo_telemetry_opts())
 
               :stop ->
                 Logger.error("""
@@ -250,7 +250,12 @@ defmodule Fable.ProcessManager do
         %{
           state
           | listen_ref: ref,
-            handler: state.repo.get_by!(state.config.process_manager_schema, name: state.name)
+            handler:
+              state.repo.get_by!(
+                state.config.process_manager_schema,
+                [name: state.name],
+                repo_telemetry_opts()
+              )
         }
       else
         _ ->
@@ -262,5 +267,9 @@ defmodule Fable.ProcessManager do
 
   defp acquire_lock(state) do
     state
+  end
+
+  defp repo_telemetry_opts() do
+    [telemetry_options: [fable_internal: true]]
   end
 end
