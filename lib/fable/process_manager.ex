@@ -29,7 +29,7 @@ defmodule Fable.ProcessManager do
   def disable(repo, name) do
     Fable.ProcessManager.State
     |> where(name: ^to_string(name))
-    |> repo.update_all(set: [active: false])
+    |> repo.update_all([set: [active: false]], repo_telemetry_opts())
   end
 
   def start_link(opts) do
@@ -148,11 +148,17 @@ defmodule Fable.ProcessManager do
   end
 
   defp handle_event(event, state) do
+    :telemetry.span([:fable, :process_manager, :handle_event], %{handler: state.handler}, fn ->
+      {handle_run_event(event, state), %{}}
+    end)
+  end
+
+  defp handle_run_event(event, state) do
     case run_handler(state, event) do
       {:ok, data} ->
         state.handler
         |> Fable.ProcessManager.State.progress_to(event.id, data)
-        |> state.repo.update()
+        |> state.repo.update(repo_telemetry_opts())
         |> case do
           {:ok, handler} ->
             {:cont, %__MODULE__{state | handler: handler}}
@@ -182,7 +188,7 @@ defmodule Fable.ProcessManager do
 
               state.handler
               |> Fable.ProcessManager.State.update_state(handler_state)
-              |> state.repo.update!()
+              |> state.repo.update!(repo_telemetry_opts())
 
             :stop ->
               Logger.error("""
@@ -229,32 +235,51 @@ defmodule Fable.ProcessManager do
   end
 
   defp get_events(state) do
-    state.config.event_schema
-    |> where([e], e.id > ^state.handler.last_event_id)
-    |> order_by(asc: :id)
-    |> limit(^state.batch_size)
-    |> state.repo.all()
+    :telemetry.span([:fable, :process_manager, :get_events], %{handler: state.handler}, fn ->
+      result =
+        state.config.event_schema
+        |> where([e], e.id > ^state.handler.last_event_id)
+        |> order_by(asc: :id)
+        |> limit(^state.batch_size)
+        |> state.repo.all(repo_telemetry_opts())
+
+      {result, %{}}
+    end)
   end
 
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
-    with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
-      Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
+    :telemetry.span([:fable, :process_manager, :acquire_lock], %{}, fn ->
+      result =
+        with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
+          Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 
-      ref = Postgrex.Notifications.listen!(state.notifications, "events")
+          ref = Postgrex.Notifications.listen!(state.notifications, "events")
 
-      %{
-        state
-        | listen_ref: ref,
-          handler: state.repo.get_by!(state.config.process_manager_schema, name: state.name)
-      }
-    else
-      _ ->
-        Process.send_after(self(), :acquire_lock, 5_000)
-        state
-    end
+          %{
+            state
+            | listen_ref: ref,
+              handler:
+                state.repo.get_by!(
+                  state.config.process_manager_schema,
+                  [name: state.name],
+                  repo_telemetry_opts()
+                )
+          }
+        else
+          _ ->
+            Process.send_after(self(), :acquire_lock, 5_000)
+            state
+        end
+
+      {result, %{}}
+    end)
   end
 
   defp acquire_lock(state) do
     state
+  end
+
+  defp repo_telemetry_opts() do
+    [telemetry_options: [fable_internal: true]]
   end
 end
