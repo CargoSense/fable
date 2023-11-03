@@ -1,11 +1,13 @@
-defmodule Fable.Migrations.CreateEvents do
+defmodule Fable.Migrations do
   use Ecto.Migration
 
-  def change do
-    create table(:events, primary_key: false) do
+  def events_table(table, opts \\ []) do
+    aggregate_type = Keyword.get(opts, :aggregate_type, :uuid)
+
+    create table(table, primary_key: false) do
       add(:id, :bigserial, primary_key: true)
       add(:prev_event_id, :integer)
-      add(:aggregate_id, :uuid, null: false)
+      add(:aggregate_id, aggregate_type, null: false)
       add(:aggregate_table, :string, null: false)
       add(:type, :string, null: false)
       add(:version, :integer, null: false)
@@ -14,7 +16,7 @@ defmodule Fable.Migrations.CreateEvents do
       add(:inserted_at, :timestamp, null: false, default: fragment("statement_timestamp()"))
     end
 
-    create(index(:events, [:aggregate_id, :aggregate_table]))
+    create index(table, [:aggregate_id, :aggregate_table])
 
     execute(
       """
@@ -24,13 +26,14 @@ defmodule Fable.Migrations.CreateEvents do
       as $$
         DECLARE
           rcount int;
-          result uuid;
+          result #{aggregate_type};
           find_aggregate text := format(
             'SELECT id FROM %I WHERE id = $1', NEW.aggregate_table
           );
           event_json text := json_build_object(
             'aggregate_id', NEW.aggregate_id,
             'aggregate_table', NEW.aggregate_table,
+            'events_table', TG_TABLE_NAME,
             'id', NEW.id
           );
           update_aggregate text := format(
@@ -63,11 +66,11 @@ defmodule Fable.Migrations.CreateEvents do
 
     execute(
       """
-      create trigger event_insert_update_last_event_id after insert on events
+      create trigger event_insert_update_last_event_id after insert on #{table}
       for each row
         execute procedure fn_trigger_last_event_update()
       """,
-      "drop trigger event_insert_update_last_event_id ON events"
+      "drop trigger event_insert_update_last_event_id ON #{table}"
     )
   end
 end

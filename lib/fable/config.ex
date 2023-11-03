@@ -15,7 +15,7 @@ defmodule Fable.Config do
     :repo,
     :registry,
     :router,
-    event_schema: Fable.Event,
+    event_schema: {"events", Fable.Event},
     process_manager_schema: Fable.ProcessManager.State,
     json_library: Jason
   ]
