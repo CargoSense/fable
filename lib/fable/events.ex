@@ -83,12 +83,18 @@ defmodule Fable.Events do
   @doc """
   Creates a function, which emits events for an aggregate when passed to `Repo.transaction`.
   """
-  @callback emit(Fable.aggregate(), emit_callback, Keyword.t()) :: transation_fun
+  @callback emit(Fable.aggregate(), emit_callback(), Keyword.t()) :: transation_fun
 
   @doc """
   Emit events as step within an `Ecto.Multi` pipeline.
   """
-  @callback emit(Ecto.Multi.t(), Fable.aggregate(), Ecto.Multi.name(), emit_callback, Keyword.t()) ::
+  @callback emit(
+              Ecto.Multi.t(),
+              Fable.aggregate(),
+              Ecto.Multi.name(),
+              emit_callback(),
+              Keyword.t()
+            ) ::
               Ecto.Multi.t()
 
   defmacro __using__(opts) do
@@ -238,24 +244,23 @@ defmodule Fable.Events do
   @spec emit(
           Fable.Config.t(),
           Fable.aggregate(),
-          emit_callback,
+          emit_callback(),
           Ecto.Multi.changes(),
           Keyword.t()
         ) ::
           transation_fun
   def emit(config, %{__meta__: %Ecto.Schema.Metadata{}} = aggregate, fun, changes \\ %{}, opts)
-      when is_function(fun, 3) or is_function(fun, 2) do
+      when is_function(fun, 2) or is_function(fun, 3) do
     check_schema_fields(aggregate)
 
     fn repo ->
       config = Map.put(config, :repo, repo)
       aggregate = lock(aggregate, repo) || aggregate
 
-      events = case fun do
-        fun when is_function(fun, 3) ->
-          fun.(aggregate, repo, changes)
-        fun when is_function(fun, 2) ->
-          fun.(aggregate, repo)
+      events =
+        case fun do
+          fun when is_function(fun, 2) -> fun.(aggregate, repo)
+          fun when is_function(fun, 3) -> fun.(aggregate, repo, changes)
         end
 
       result_of_applied_events = handle_events(config, aggregate, events, opts)
@@ -269,7 +274,7 @@ defmodule Fable.Events do
           Ecto.Multi.t(),
           Fable.aggregate(),
           Ecto.Multi.name(),
-          emit_callback,
+          emit_callback(),
           Keyword.t()
         ) ::
           Ecto.Multi.t()
