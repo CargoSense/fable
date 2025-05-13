@@ -62,7 +62,9 @@ defmodule Fable.Events do
 
   """
   @type event_or_events :: Fable.Event.t() | [Fable.Event.t()]
-  @type emit_callback :: (Ecto.Schema.t(), Ecto.Repo.t(), Ecto.Multi.changes() -> event_or_events)
+  @type emit_callback ::
+          (Ecto.Schema.t(), Ecto.Repo.t() -> event_or_events())
+          | (Ecto.Schema.t(), Ecto.Repo.t(), Ecto.Multi.changes() -> event_or_events())
   @type transation_fun :: (Ecto.Repo.t() -> any())
   @type handler ::
           (Fable.aggregate(), Fable.Event.t() -> {:ok, Fable.aggregate()} | {:error, term})
