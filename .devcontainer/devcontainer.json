@@ -1,0 +1,17 @@
+{
+  "name": "fable",
+  "image": "docker.io/library/elixir:1.19.5",
+  "features": {
+    "ghcr.io/CargoSense/devcontainer-features/elixir-project:1": {}
+  },
+  "runArgs": ["--name", "fable"],
+  "updateContentCommand": "mix deps.get",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "jasonnutter.vscode-codeowners"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
