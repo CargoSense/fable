@@ -1,0 +1,18 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+  publish:
+    name: Publish to Hex
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: CargoSense/setup-elixir-project@v1
+      - run: mix hex.publish --yes
