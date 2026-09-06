@@ -2,6 +2,7 @@ defmodule Fable.MixProject do
   use Mix.Project
 
   @version "0.0.1-alpha.1"
+  @source_url "https://github.com/CargoSense/fable"
 
   def project do
     [
@@ -9,25 +10,14 @@ defmodule Fable.MixProject do
       version: @version,
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
-      description: "Write simple, event driven applications",
-      deps: deps(),
+      description: "Write simple, event-driven applications.",
       package: package(),
+      deps: deps(),
+      name: "Fable",
+      source_url: @source_url,
+      homepage_url: @source_url,
       elixirc_paths: elixirc_paths(Mix.env()),
-      docs: [
-        main: "Fable",
-        source_ref: "v#{@version}",
-        source_url: "https://github.com/cargosense/fable"
-      ]
-    ]
-  end
-
-  defp package do
-    [
-      description: "Write simple, event driven applications",
-      files: ["lib", "config", "mix.exs", "README*", ".formatter.exs"],
-      maintainers: ["Ben Wilson"],
-      licenses: ["MIT"],
-      links: %{github: "https://github.com/CargoSense/fable"}
+      docs: &docs/0
     ]
   end
 
@@ -38,18 +28,41 @@ defmodule Fable.MixProject do
     ]
   end
 
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:ecto_sql, "~> 3.2"},
+      {:jason, "~> 1.1", optional: true},
+      {:postgrex, "~> 0.14"},
+      {:telemetry, "~> 1.0"},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "Fable",
+      extras: ["README.md"],
+      formatters: ["html"],
+      source_ref: "v#{@version}",
+      source_url: @source_url
+    ]
+  end
+
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Run "mix help deps" to learn about dependencies.
-  defp deps do
+  defp package do
     [
-      {:telemetry, "~> 1.0"},
-      {:ex_doc, "~> 0.21", only: [:dev]},
-      {:ecto_sql, "~> 3.2"},
-      {:postgrex, "~> 0.14"},
-      {:jason, "~> 1.1", optional: true}
+      description: "Write simple, event-driven applications.",
+      files: ["config", "lib", "mix.exs", "README*", ".formatter.exs"],
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/releases"
+      },
+      maintainers: ["Ben Wilson"]
     ]
   end
 end
