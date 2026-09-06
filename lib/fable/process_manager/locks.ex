@@ -1,4 +1,6 @@
 defmodule Fable.ProcessManager.Locks do
+  @moduledoc false
+
   use GenServer
 
   require Logger

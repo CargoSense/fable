@@ -1,4 +1,6 @@
 defmodule Fable.ModuleColumn do
+  @moduledoc false
+
   use Ecto.Type
   def type, do: :string
   def cast(term), do: {:ok, to_string(term)}

@@ -1,4 +1,6 @@
 defmodule Fable.ProcessManager do
+  @moduledoc false
+
   use GenServer
   import Ecto.Query
   require Logger
