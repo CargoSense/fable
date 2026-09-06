@@ -250,22 +250,23 @@ defmodule Fable.ProcessManager do
   defp acquire_lock(%__MODULE__{handler: nil} = state) do
     :telemetry.span([:fable, :process_manager, :acquire_lock], %{}, fn ->
       result =
-        with :ok <- __MODULE__.Locks.acquire(state.config, state.name) do
-          Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
+        case __MODULE__.Locks.acquire(state.config, state.name) do
+          :ok ->
+            Logger.debug("Handler #{state.name} lock acquired on #{inspect(node())}")
 
-          ref = Postgrex.Notifications.listen!(state.notifications, "events")
+            ref = Postgrex.Notifications.listen!(state.notifications, "events")
 
-          %{
-            state
-            | listen_ref: ref,
-              handler:
-                state.repo.get_by!(
-                  state.config.process_manager_schema,
-                  [name: state.name],
-                  repo_telemetry_opts()
-                )
-          }
-        else
+            %{
+              state
+              | listen_ref: ref,
+                handler:
+                  state.repo.get_by!(
+                    state.config.process_manager_schema,
+                    [name: state.name],
+                    repo_telemetry_opts()
+                  )
+            }
+
           _ ->
             Process.send_after(self(), :acquire_lock, 5_000)
             state
