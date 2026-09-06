@@ -35,6 +35,7 @@ defmodule Fable.MixProject do
       {:jason, "~> 1.1", optional: true},
       {:postgrex, "~> 0.14"},
       {:telemetry, "~> 1.0"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
