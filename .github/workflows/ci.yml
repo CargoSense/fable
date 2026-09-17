@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: CargoSense/setup-elixir-project@v1
+        with:
+          elixir-version: "1.19"
+          otp-version: 28
+      - run: mix format --check-formatted
+      - run: mix deps.unlock --check-unused
+        if: ${{ !cancelled() }}
+      - run: mix credo
+        if: ${{ !cancelled() }}
+  test:
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+    strategy:
+      fail-fast: false
+      matrix:
+        otp: [29, 28, 27, 26, 25]
+        elixir: ["1.20", "1.19", "1.18"]
+        exclude:
+          - otp: 26
+            elixir: "1.20"
+          - otp: 25
+            elixir: "1.20"
+          - otp: 29
+            elixir: "1.19"
+          - otp: 25
+            elixir: "1.19"
+          - otp: 29
+            elixir: "1.18"
+          - otp: 28
+            elixir: "1.18"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: CargoSense/setup-elixir-project@v1
+        with:
+          build-flags: --no-optional-deps --warnings-as-errors
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+      - run: mix test

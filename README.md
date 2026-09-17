@@ -1,31 +1,35 @@
 # Fable
 
-Your events have a story to tell
+Write simple, event-driven applications.
+
+[![Package](https://img.shields.io/hexpm/v/fable?logo=elixir&style=for-the-badge)](https://hex.pm/packages/fable)
+[![Downloads](https://img.shields.io/hexpm/dt/fable?logo=elixir&style=for-the-badge)](https://hex.pm/packages/fable)
+[![Build](https://img.shields.io/github/actions/workflow/status/CargoSense/fable/ci.yml?branch=main&logo=github&style=for-the-badge)](https://github.com/CargoSense/fable/actions/workflows/ci.yml)
 
 ## Design Philosophy
 
-- Easy to retrofit
-- Drop in compatible with Ecto tests (async included)
-- No footguns. Event log should always be consistent.
+- Easy to retrofit.
+- Drop-in compatible with Ecto tests (async included).
+- Event log should always be consistent.
 - Events are serialized around important "aggregate" database records.
 
+## Installation
 
-## Gettings started
-
-Include `fable` in your `mix.exs`:
+Add Fable in your project's `mix.exs` file:
 
 ```elixir
 defp deps do
   [
-    {:fable, "~> 0.0.1-alpha.0", github: "CargoSense/fable", branch: "master"}
+    {:fable, "~> 0.0.1-alpha.1"}
   ]
 end
 ```
 
-Add the fable migration to `priv/repo/migrations` and migrate it.
+Add the Fable migration to `priv/repo/migrations` and migrate it.
 
-As an example we're going to wrap the following function already existing in
-a system:
+## Usage
+
+As an example, we're going to wrap the following existing function:
 
 ```elixir
 defmodule MyApp.Blog do
@@ -49,10 +53,9 @@ defmodule MyApp.Blog do
 end
 ```
 
-### Create `MyApp.Events` module
+### Create the `MyApp.Events` module
 
-First we need to create an events module, which will be dealing with all the events
-being added to the system.
+First, create an events module that will handle all the events added to the system.
 
 ```elixir
 defmodule MyApp.Events do
@@ -65,13 +68,11 @@ defmodule MyApp.Events do
 end
 ```
 
-By default the module will implement `Fable.Router.handlers/0`, but this can
-be moved to a different module by doing `use Fable.Events, router: MyApp.EventsRouter`.
+By default, the module will implement `Fable.Router.handlers/0`. This can be changed by using `use Fable.Events, router: MyApp.EventsRouter`.
 
-### Creating events
+### Creating Events
 
-The two actions of the system are creating a blog post and updating a blog post.
-In the past tense this means we'll need a `PostCreated` and a `PostUpdated` event.
+The example system consists of two actions: creating a blog post and updating a blog post. Using the past tense, define `PostCreated` and `PostUpdated` events.
 
 ```elixir
 defmodule MyApp.Blog.Events.PostCreated do
@@ -93,21 +94,15 @@ defmodule MyApp.Blog.Events.PostUpdated do
 end
 ```
 
-The data of those embedded schemas will be stored in fables event table besides
-some metadata. The schemas will need to hold whatever data you need to actually
-run the task it deals with. So in our case all the data passed to the changeset
-function for posts to be persisted.
+The data of these embedded schemas will be stored in Fable's event table along with some metadata. The schemas will  hold the data your application needs to run the task it deals with. In this example case, all the data passed to the changeset function for posts to be persisted.
 
-### Wrapping existing code
+### Wrapping Existing Code
 
-With the events being created we can move to wrapping the existing code to make
-use of `:fable`.
+With the events being created, wrap the existing code to make use of `:fable`.
 
-There are few things to do: 
+#### Moving logic to a separate function
 
-#### Move logic to separate function
-
-First move what shall happen as result of the event to a separate function.
+First, move what shall happen as result of the event to a separate function.
 
 ```elixir
 defmodule MyApp.Blog do
@@ -140,18 +135,13 @@ defmodule MyApp.Blog do
 end
 ```
 
-#### Event handler registration
+#### Registering event handlers
 
-The new functions are private, because they should never be called by someone else.
-To make them be callable by fable though they need to be registered as handlers for
-their respective events. One way to do that is having `MyApp.Blog` implement 
-`Fable.Router` as well and letting `MyApp.Events` call `handlers/0` on `MyApp.Blog`.
-This is just an example on how to handle event registration. Feel free to customize
-how registration of event handlers works.
+Note that the new functions are private and should never be called externally. To make them be callable by Fable, register handlers for their respective events. One way to do this is by having `MyApp.Blog` implement `Fable.Router` and letting `MyApp.Events` call `handlers/0` on `MyApp.Blog`. This is only example of how to handle event registration.
 
 ```elixir
 defmodule MyApp.Blog do
-  …
+  # …
 
   @behaviour Fable.Router
   @impl Fable.Router
@@ -162,7 +152,7 @@ defmodule MyApp.Blog do
     }
   end
 
-  …
+  # …
 end
 
 defmodule MyApp.Events do
@@ -181,18 +171,17 @@ defmodule MyApp.Events do
 end
 ```
 
-#### Emit events
+#### Emitting events
 
-The last thing to do is emit the events, so the code in the handlers is called
-again.
+The last thing to do is emit the events so that the code in the hevent andlers is called.
 
 ```elixir
 defmodule MyApp.Blog do
-  …
+  # …
 
   def create_post(params, user) do
     %Post{id: Ecto.UUID.generate()}
-    |> MyApp.Events.emit(fn _, _, _ -> 
+    |> MyApp.Events.emit(fn _, _, _ ->
       with :ok <- is_admin(user) do
         %Events.PostCreated{
           title: params["title"],
@@ -203,11 +192,11 @@ defmodule MyApp.Blog do
     |> MyApp.Repo.transaction()
   end
 
-  …
+  # …
 
   def update_post(post, params, user) do
     post
-    |> MyApp.Events.emit(fn _, _, _ -> 
+    |> MyApp.Events.emit(fn _, _, _ ->
       with :ok <- is_admin(user) do
         %Events.PostUpdated{
           title: params["title"],
@@ -218,7 +207,7 @@ defmodule MyApp.Blog do
     |> MyApp.Repo.transaction()
   end
 
-  …
+  # …
 end
 
 defmodule MyApp.Blog.Post do
@@ -230,12 +219,8 @@ defmodule MyApp.Blog.Post do
     # needs a migration as well
     field :last_event_id, :integer
   end
-
 end
 ```
 
-The important thing to note here is that the aggregate (the post) will need the
-`:last_event_id` field being added on the schema and in the db. But also it needs
-to have an id, before events can be applied to it. This is simple for uuid based
-ids as shown. Using integer based ids is supported, but initial creation cannot be 
-handled by a fable event; consider some combination with `Ecto.Multi`.
+> [!IMPORTANT]
+> Note that the aggregate (the post) will need the `:last_event_id` field added on the schema and in the database. The aggregate also needs an `id` before events can be applied to it. This is simple for UUID-based IDs as shown. Using integer-based IDs is supported, but initial creation cannot be handled by a Fable event. Consider using in combination with `Ecto.Multi`.
