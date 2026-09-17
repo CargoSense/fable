@@ -155,7 +155,7 @@ defmodule Fable.ProcessManager do
     end)
   end
 
-  defp handle_run_event(event, state) do
+  defp handle_run_event(event, %__MODULE__{} = state) do
     case run_handler(state, event) do
       {:ok, data} ->
         state.handler
