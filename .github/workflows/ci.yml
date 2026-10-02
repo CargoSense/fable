@@ -4,7 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  workflow_call:
   workflow_dispatch:
 
 jobs:
@@ -22,6 +21,7 @@ jobs:
       - run: mix credo
         if: ${{ !cancelled() }}
   test:
+    name: Elixir ${{ matrix.elixir }} OTP ${{ matrix.otp }}
     runs-on: ubuntu-latest
     env:
       MIX_ENV: test
