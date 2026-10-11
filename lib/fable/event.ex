@@ -13,7 +13,7 @@ defmodule Fable.Event do
 
   use Ecto.Schema
 
-  schema "events" do
+  schema "abstract table: events" do
     field(:prev_event_id, :integer)
     field(:aggregate_id, Ecto.UUID)
     field(:aggregate_table, :string)
@@ -28,7 +28,7 @@ defmodule Fable.Event do
     queryable |> where(active: true)
   end
 
-  def for_aggregate(schema \\ __MODULE__, %agg{id: id}) do
+  def for_aggregate(schema, %agg{id: id}) do
     table = agg.__schema__(:source)
 
     schema

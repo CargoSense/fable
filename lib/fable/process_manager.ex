@@ -53,8 +53,8 @@ defmodule Fable.ProcessManager do
 
   def handle_continue(:acquire_lock, state) do
     state
-    |> acquire_lock
-    |> process_events
+    |> acquire_lock()
+    |> process_events()
     |> case do
       {:ok, state} ->
         {:noreply, state}
@@ -69,8 +69,8 @@ defmodule Fable.ProcessManager do
   # to get the lock.
   def handle_info(:acquire_lock, %__MODULE__{handler: nil} = state) do
     state
-    |> acquire_lock
-    |> process_events
+    |> acquire_lock()
+    |> process_events()
     |> case do
       {:ok, state} ->
         {:noreply, state}
@@ -87,7 +87,7 @@ defmodule Fable.ProcessManager do
       # There's a new event we haven't already pulled it from the database
       %{"id" => event_id} when event_id > last_event_id ->
         state
-        |> process_events
+        |> process_events()
         |> case do
           {:ok, state} ->
             {:noreply, state}
@@ -103,7 +103,7 @@ defmodule Fable.ProcessManager do
 
   def handle_info(:retry, state) do
     state
-    |> process_events
+    |> process_events()
     |> case do
       {:ok, state} ->
         {:noreply, state}
